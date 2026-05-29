@@ -10,7 +10,7 @@ from discord import app_commands
 from discord.ext import commands
 from django.utils import timezone
 
-from ballsdex.core.utils.transformers import ModelTransformer
+from ballsdex.core.utils.transformers import TTLModelTransformer
 from bd_models.models import Player
 from fcdex_3_0.fcdex_ext.services import increment_stat
 from fcdex_3_0.fcdex_ext.views import build_tournament_layout
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 log = logging.getLogger("fcdex_3_0.tournament")
 
 
-class TournamentTransformer(ModelTransformer[Tournament]):
+class TournamentTransformer(TTLModelTransformer[Tournament]):
     name = "tournament"
     column = "name"
     model = Tournament

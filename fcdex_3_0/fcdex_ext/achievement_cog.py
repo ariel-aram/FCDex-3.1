@@ -7,7 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from ballsdex.core.utils.transformers import ModelTransformer
+from ballsdex.core.utils.transformers import TTLModelTransformer
 from bd_models.models import Player
 from fcdex_3_0.fcdex_ext.services import check_achievements, claim_achievement, get_or_create_stats
 from fcdex_3_0.fcdex_ext.views import build_achievement_layout
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 log = logging.getLogger("fcdex_3_0.achievement")
 
 
-class AchievementTransformer(ModelTransformer[Achievement]):
+class AchievementTransformer(TTLModelTransformer[Achievement]):
     name = "achievement"
     column = "name"
     model = Achievement

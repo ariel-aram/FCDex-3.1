@@ -60,7 +60,7 @@ Add to `config/extra.toml` in your BallsDex directory:
 
 ```toml
 [[ballsdex.packages]]
-location = "git+https://github.com/TheFCProject/FCDex-3.0.git@1.0.1"
+location = "git+https://github.com/TheFCProject/FCDex-3.0.git@1.0.2"
 path = "fcdex_3_0"
 enabled = true
 ```
