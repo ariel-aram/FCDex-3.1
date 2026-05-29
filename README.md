@@ -60,7 +60,7 @@ Add to `config/extra.toml` in your BallsDex directory:
 
 ```toml
 [[ballsdex.packages]]
-location = "git+https://github.com/TheFCProject/FCDex-3.0.git@1.0.0"
+location = "git+https://github.com/TheFCProject/FCDex-3.0.git@1.0.1"
 path = "fcdex_3_0"
 enabled = true
 ```
@@ -90,7 +90,7 @@ Open the admin panel and create `Achievement` entries under **FCDex 3.0**. Set t
 
 ## Requirements
 
-- BallsDex **V3** (3.0.0+)
+- BallsDex **V3** (3.0.0+) — must already be installed; this extra does not pull `ballsdex` from PyPI
 - Python **3.12+**
 
 ## License
