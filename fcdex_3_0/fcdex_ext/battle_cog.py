@@ -1,0 +1,269 @@
+from __future__ import annotations
+
+import logging
+import random
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+from bd_models.models import BallInstance, Player
+from ballsdex.core.utils.transformers import BallInstanceTransform
+from fcdex_3_0.fcdex_ext.battle_engine import BattleBall, BattleInstance, gen_battle
+from fcdex_3_0.fcdex_ext.services import increment_stat
+from fcdex_3_0.fcdex_ext.views import BattleLayoutView, battle_log_file, build_battle_result_layout
+from settings.models import settings
+
+if TYPE_CHECKING:
+    from ballsdex.core.bot import BallsDexBot
+
+log = logging.getLogger("fcdex_3_0.battle")
+
+_active_battles: list[ActiveBattle] = []
+
+
+@dataclass
+class ActiveBattle:
+    interaction: discord.Interaction
+    author: discord.Member
+    opponent: discord.Member
+    instance: BattleInstance = field(default_factory=BattleInstance)
+    author_ready: bool = False
+    opponent_ready: bool = False
+
+    def involves(self, user: discord.User | discord.Member) -> bool:
+        return user.id in (self.author.id, self.opponent.id)
+
+    def deck_for(self, user: discord.User | discord.Member) -> list[BattleBall]:
+        return self.instance.p1_balls if user.id == self.author.id else self.instance.p2_balls
+
+    async def refresh_message(self):
+        layout = BattleLayoutView(self)
+        await self.interaction.edit_original_response(view=layout, attachments=[])
+
+    async def mark_ready(self, interaction: discord.Interaction):
+        if not self.involves(interaction.user):
+            await interaction.response.send_message("You aren't in this battle.", ephemeral=True)
+            return
+
+        if interaction.user.id == self.author.id:
+            self.author_ready = True
+        else:
+            self.opponent_ready = True
+
+        if self.author_ready and self.opponent_ready:
+            if not self.instance.p1_balls or not self.instance.p2_balls:
+                await interaction.response.send_message(
+                    f"Both players need at least one {settings.collectible_name} in their deck!",
+                    ephemeral=True,
+                )
+                return
+            await self._run_battle(interaction)
+            return
+
+        await interaction.response.send_message(
+            "You're ready! Waiting for the other player.", ephemeral=True
+        )
+        await interaction.message.edit(view=BattleLayoutView(self))
+
+    async def _run_battle(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        log_lines = list(gen_battle(self.instance))
+        result_layout = build_battle_result_layout(self, log_lines)
+
+        winner_member = self.author if self.instance.winner == self.author.display_name else self.opponent
+        loser_member = self.opponent if winner_member == self.author else self.author
+
+        winner_player, _ = await Player.objects.aget_or_create(discord_id=winner_member.id)
+        loser_player, _ = await Player.objects.aget_or_create(discord_id=loser_member.id)
+        await increment_stat(winner_player, "battles_won")
+        await increment_stat(winner_player, "battles_played")
+        await increment_stat(loser_player, "battles_played")
+
+        if self in _active_battles:
+            _active_battles.remove(self)
+
+        await interaction.message.edit(
+            content=f"{self.author.mention} vs {self.opponent.mention} — **{self.instance.winner} wins!**",
+            view=result_layout,
+            attachments=[battle_log_file(log_lines)],
+        )
+
+    async def cancel(self, interaction: discord.Interaction):
+        if not self.involves(interaction.user):
+            await interaction.response.send_message("You aren't in this battle.", ephemeral=True)
+            return
+
+        if self in _active_battles:
+            _active_battles.remove(self)
+
+        await interaction.response.edit_message(
+            content=f"Battle cancelled by {interaction.user.mention}.",
+            view=BattleLayoutView(self),
+            attachments=[],
+        )
+
+
+def fetch_battle(user: discord.User | discord.Member) -> ActiveBattle | None:
+    for battle in _active_battles:
+        if battle.involves(user):
+            return battle
+    return None
+
+
+def ball_instance_to_battle_ball(instance: BallInstance, owner: str, bot: BallsDexBot) -> BattleBall:
+    emoji = ""
+    if emoji_obj := bot.get_emoji(instance.countryball.emoji_id):
+        emoji = str(emoji_obj)
+    return BattleBall(
+        instance_id=instance.pk,
+        name=instance.countryball.country,
+        owner=owner,
+        health=instance.health,
+        attack=instance.attack,
+        emoji=emoji,
+    )
+
+
+class BattleCog(commands.GroupCog, group_name="battle"):
+    """Challenge friends to clubball battles."""
+
+    def __init__(self, bot: BallsDexBot):
+        self.bot = bot
+
+    @app_commands.command(name="challenge", description="Challenge a friend to a battle")
+    async def challenge(self, interaction: discord.Interaction, opponent: discord.Member):
+        if opponent.bot:
+            await interaction.response.send_message("You can't battle bots.", ephemeral=True)
+            return
+        if opponent.id == interaction.user.id:
+            await interaction.response.send_message("You can't battle yourself.", ephemeral=True)
+            return
+        if fetch_battle(interaction.user) or fetch_battle(opponent):
+            await interaction.response.send_message(
+                "One of you is already in a battle.", ephemeral=True
+            )
+            return
+
+        battle = ActiveBattle(interaction, interaction.user, opponent)
+        _active_battles.append(battle)
+
+        await interaction.response.send_message(
+            f"Hey {opponent.mention}, {interaction.user.mention} wants to battle!",
+            view=BattleLayoutView(battle),
+        )
+
+    async def _fill_deck(
+        self,
+        interaction: discord.Interaction,
+        *,
+        mode: str,
+    ):
+        battle = fetch_battle(interaction.user)
+        if battle is None:
+            await interaction.response.send_message("You aren't in a battle.", ephemeral=True)
+            return
+
+        if interaction.guild_id != battle.interaction.guild_id:
+            await interaction.response.send_message(
+                "You must be in the same server as your battle.", ephemeral=True
+            )
+            return
+
+        ready = battle.author_ready if interaction.user.id == battle.author.id else battle.opponent_ready
+        if ready:
+            await interaction.response.send_message(
+                "You can't change your deck after marking ready.", ephemeral=True
+            )
+            return
+
+        player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
+        queryset = (
+            BallInstance.objects.filter(player=player, deleted=False)
+            .select_related("ball")
+            .prefetch_related("ball")
+        )
+
+        instances = [x async for x in queryset]
+        if not instances:
+            await interaction.response.send_message(
+                f"You don't have any {settings.plural_collectible_name}.", ephemeral=True
+            )
+            return
+
+        deck = battle.deck_for(interaction.user)
+        deck.clear()
+
+        if mode == "all":
+            count = min(5, len(instances))
+            chosen = random.sample(instances, count)
+        elif mode == "best":
+            chosen = sorted(instances, key=lambda x: x.attack + x.health, reverse=True)[:5]
+        seen: set[int] = set()
+        for instance in chosen:
+            if instance.pk in seen:
+                continue
+            seen.add(instance.pk)
+            deck.append(ball_instance_to_battle_ball(instance, interaction.user.display_name, self.bot))
+
+        await interaction.response.send_message(
+            f"Deck updated with **{len(deck)}** {settings.plural_collectible_name} ({mode})!",
+            ephemeral=True,
+        )
+
+        try:
+            await battle.interaction.edit_original_response(view=BattleLayoutView(battle))
+        except discord.HTTPException:
+            log.exception("Failed to refresh battle layout")
+
+    @app_commands.command(name="all", description="Fill your deck with random clubballs")
+    async def all_balls(self, interaction: discord.Interaction):
+        await self._fill_deck(interaction, mode="all")
+
+    @app_commands.command(name="best", description="Fill your deck with your strongest clubballs")
+    async def best_balls(self, interaction: discord.Interaction):
+        await self._fill_deck(interaction, mode="best")
+
+    @app_commands.command(name="add", description="Add a specific clubball to your battle deck")
+    async def add_ball(
+        self,
+        interaction: discord.Interaction,
+        clubball: BallInstanceTransform,
+    ):
+        battle = fetch_battle(interaction.user)
+        if battle is None:
+            await interaction.response.send_message("You aren't in a battle.", ephemeral=True)
+            return
+
+        deck = battle.deck_for(interaction.user)
+        ball = ball_instance_to_battle_ball(clubball, interaction.user.display_name, self.bot)
+        if any(x.instance_id == ball.instance_id for x in deck):
+            await interaction.response.send_message("That card is already in your deck.", ephemeral=True)
+            return
+
+        deck.append(ball)
+        await interaction.response.send_message(f"Added `{clubball.short_description()}`.", ephemeral=True)
+        await battle.interaction.edit_original_response(view=BattleLayoutView(battle))
+
+    @app_commands.command(name="remove", description="Remove a clubball from your battle deck")
+    async def remove_ball(
+        self,
+        interaction: discord.Interaction,
+        clubball: BallInstanceTransform,
+    ):
+        battle = fetch_battle(interaction.user)
+        if battle is None:
+            await interaction.response.send_message("You aren't in a battle.", ephemeral=True)
+            return
+
+        deck = battle.deck_for(interaction.user)
+        before = len(deck)
+        deck[:] = [x for x in deck if x.instance_id != clubball.pk]
+        if len(deck) == before:
+            await interaction.response.send_message("That card isn't in your deck.", ephemeral=True)
+            return
+
+        await interaction.response.send_message(f"Removed `{clubball.short_description()}`.", ephemeral=True)
+        await battle.interaction.edit_original_response(view=BattleLayoutView(battle))
