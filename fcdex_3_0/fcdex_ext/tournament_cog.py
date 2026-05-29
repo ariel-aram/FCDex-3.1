@@ -6,12 +6,12 @@ import random
 from typing import TYPE_CHECKING
 
 import discord
-from django.utils import timezone
 from discord import app_commands
 from discord.ext import commands
+from django.utils import timezone
 
-from bd_models.models import Player
 from ballsdex.core.utils.transformers import ModelTransformer
+from bd_models.models import Player
 from fcdex_3_0.fcdex_ext.services import increment_stat
 from fcdex_3_0.fcdex_ext.views import build_tournament_layout
 from fcdex_3_0.models import (
@@ -62,10 +62,7 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
 
         host, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
         tournament = await Tournament.objects.acreate(
-            name=name,
-            description=description,
-            host=host,
-            semifinal_cutoff=semifinal_cutoff,
+            name=name, description=description, host=host, semifinal_cutoff=semifinal_cutoff
         )
 
         layout = build_tournament_layout(
@@ -82,16 +79,10 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
 
     @app_commands.command(name="join", description="Join an open tournament")
     @app_commands.choices(
-        group=[
-            app_commands.Choice(name="Legacy", value="legacy"),
-            app_commands.Choice(name="Main", value="main"),
-        ]
+        group=[app_commands.Choice(name="Legacy", value="legacy"), app_commands.Choice(name="Main", value="main")]
     )
     async def join(
-        self,
-        interaction: discord.Interaction,
-        tournament: TournamentTransform,
-        group: app_commands.Choice[str],
+        self, interaction: discord.Interaction, tournament: TournamentTransform, group: app_commands.Choice[str]
     ):
         if tournament.status != TournamentStatus.REGISTRATION:
             await interaction.response.send_message("Registration is closed for this tournament.", ephemeral=True)
@@ -99,21 +90,17 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
 
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
         registration, created = await TournamentRegistration.objects.aget_or_create(
-            tournament=tournament,
-            player=player,
-            defaults={"group": group.value},
+            tournament=tournament, player=player, defaults={"group": group.value}
         )
         if not created:
             await interaction.response.send_message(
-                f"You're already registered in the **{registration.get_group_display()}** group.",
-                ephemeral=True,
+                f"You're already registered in the **{registration.get_group_display()}** group.", ephemeral=True
             )
             return
 
         await increment_stat(player, "tournament_participations")
         await interaction.response.send_message(
-            f"Joined **{tournament.name}** as **{group.name}** group! Discuss strategy with your team.",
-            ephemeral=True,
+            f"Joined **{tournament.name}** as **{group.name}** group! Discuss strategy with your team.", ephemeral=True
         )
 
     @app_commands.command(name="info", description="Show tournament details")
@@ -141,8 +128,7 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
     ):
         if tournament.status not in (TournamentStatus.GROUP_STAGE, TournamentStatus.REGISTRATION):
             await interaction.response.send_message(
-                "Scores can only be updated during registration or group stage.",
-                ephemeral=True,
+                "Scores can only be updated during registration or group stage.", ephemeral=True
             )
             return
 
@@ -203,21 +189,16 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
 
         for group in TournamentGroup:
             players = [
-                reg.player
-                async for reg in tournament.registrations.filter(group=group.value).select_related("player")
+                reg.player async for reg in tournament.registrations.filter(group=group.value).select_related("player")
             ]
             for p1, p2 in itertools.combinations(players, 2):
                 await TournamentMatch.objects.acreate(
-                    tournament=tournament,
-                    round=TournamentRound.GROUP,
-                    group=group.value,
-                    player1=p1,
-                    player2=p2,
+                    tournament=tournament, round=TournamentRound.GROUP, group=group.value, player1=p1, player2=p2
                 )
 
         await interaction.response.send_message(
             f"**{tournament.name}** group stage started with **{count}** players! "
-            f"Use `/battle challenge` for matches and `/tournament score` to track points.",
+            f"Use `/battle challenge` for matches and `/tournament score` to track points."
         )
 
     @app_commands.command(name="advance", description="Advance to semifinals/finals (host/admin)")
@@ -226,10 +207,7 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
         if tournament.status == TournamentStatus.GROUP_STAGE:
             eliminated = 0
             for group in TournamentGroup:
-                regs = [
-                    r
-                    async for r in tournament.registrations.filter(group=group.value).order_by("-score")
-                ]
+                regs = [r async for r in tournament.registrations.filter(group=group.value).order_by("-score")]
                 if len(regs) <= 1:
                     continue
                 cutoff_index = max(1, len(regs) // 2)
@@ -269,16 +247,15 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
 
             if len(winners) >= 2:
                 await TournamentMatch.objects.acreate(
-                    tournament=tournament,
-                    round=TournamentRound.FINAL,
-                    player1=winners[0],
-                    player2=winners[1],
+                    tournament=tournament, round=TournamentRound.FINAL, player1=winners[0], player2=winners[1]
                 )
                 tournament.status = TournamentStatus.FINALS
                 await tournament.asave(update_fields=("status",))
                 await interaction.response.send_message("Finals match created! Bring your best teams.")
             else:
-                await interaction.response.send_message("Not enough semifinal winners to create a final.", ephemeral=True)
+                await interaction.response.send_message(
+                    "Not enough semifinal winners to create a final.", ephemeral=True
+                )
             return
 
         if tournament.status == TournamentStatus.FINALS:
@@ -319,10 +296,7 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
                     if match.winner
                     else ("✅ Done" if match.completed else "⏳ Pending")
                 )
-                lines.append(
-                    f"<@{match.player1.discord_id}> vs {p2} — {status} "
-                    f"({match.score1}-{match.score2})"
-                )
+                lines.append(f"<@{match.player1.discord_id}> vs {p2} — {status} ({match.score1}-{match.score2})")
             sections.append(f"### {round_label}\n" + ("\n".join(lines) if lines else "*No matches*"))
 
         layout = build_tournament_layout(f"🗂️ {tournament.name} Bracket", sections)

@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Typecheck vendor (BallsDex source for Pyright)
+.vendor/

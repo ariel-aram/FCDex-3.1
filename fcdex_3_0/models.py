@@ -35,6 +35,7 @@ class AchievementType(models.TextChoices):
 
 class PlayerStats(models.Model):
     player = models.OneToOneField(Player, on_delete=models.CASCADE, related_name="fcdex_stats")
+    player_id: int
     battles_won = models.PositiveIntegerField(default=0)
     battles_played = models.PositiveIntegerField(default=0)
     merges_completed = models.PositiveIntegerField(default=0)
@@ -57,6 +58,7 @@ class Achievement(models.Model):
     required_count = models.PositiveIntegerField(default=1)
     reward_money = models.PositiveBigIntegerField(default=0)
     reward_ball = models.ForeignKey(Ball, on_delete=models.SET_NULL, null=True, blank=True)
+    reward_ball_id: int | None
     hidden = models.BooleanField(default=False)
     enabled = models.BooleanField(default=True)
 
@@ -69,6 +71,7 @@ class Achievement(models.Model):
 
 class PlayerAchievement(models.Model):
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="fcdex_achievements")
+    player_id: int
     achievement = models.ForeignKey(Achievement, on_delete=models.CASCADE)
     progress = models.PositiveIntegerField(default=0)
     unlocked_at = models.DateTimeField(null=True, blank=True)
@@ -85,12 +88,9 @@ class Tournament(models.Model):
     name = models.CharField(max_length=64, unique=True)
     description = models.TextField(blank=True, default="")
     host = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="hosted_tournaments")
-    status = models.CharField(
-        max_length=16, choices=TournamentStatus.choices, default=TournamentStatus.REGISTRATION
-    )
+    status = models.CharField(max_length=16, choices=TournamentStatus.choices, default=TournamentStatus.REGISTRATION)
     semifinal_cutoff = models.PositiveIntegerField(
-        default=0,
-        help_text="Minimum group score required to reach semifinals. Lowest scorers are eliminated.",
+        default=0, help_text="Minimum group score required to reach semifinals. Lowest scorers are eliminated."
     )
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
@@ -106,6 +106,7 @@ class Tournament(models.Model):
 class TournamentRegistration(models.Model):
     tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name="registrations")
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="tournament_registrations")
+    player_id: int
     group = models.CharField(max_length=8, choices=TournamentGroup.choices)
     score = models.IntegerField(default=0)
     eliminated = models.BooleanField(default=False)
@@ -122,15 +123,11 @@ class TournamentMatch(models.Model):
     tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name="matches")
     round = models.CharField(max_length=12, choices=TournamentRound.choices)
     group = models.CharField(max_length=8, choices=TournamentGroup.choices, null=True, blank=True)
-    player1 = models.ForeignKey(
-        Player, on_delete=models.CASCADE, related_name="tournament_matches_as_p1"
-    )
+    player1 = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="tournament_matches_as_p1")
     player2 = models.ForeignKey(
         Player, on_delete=models.CASCADE, related_name="tournament_matches_as_p2", null=True, blank=True
     )
-    winner = models.ForeignKey(
-        Player, on_delete=models.SET_NULL, null=True, blank=True, related_name="tournament_wins"
-    )
+    winner = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name="tournament_wins")
     score1 = models.IntegerField(default=0)
     score2 = models.IntegerField(default=0)
     completed = models.BooleanField(default=False)
@@ -145,15 +142,10 @@ class TournamentMatch(models.Model):
 
 class MergeLog(models.Model):
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="merge_logs")
-    source_ball1 = models.ForeignKey(
-        BallInstance, on_delete=models.SET_NULL, null=True, related_name="merge_source1"
-    )
-    source_ball2 = models.ForeignKey(
-        BallInstance, on_delete=models.SET_NULL, null=True, related_name="merge_source2"
-    )
-    result_ball = models.ForeignKey(
-        BallInstance, on_delete=models.SET_NULL, null=True, related_name="merge_results"
-    )
+    player_id: int
+    source_ball1 = models.ForeignKey(BallInstance, on_delete=models.SET_NULL, null=True, related_name="merge_source1")
+    source_ball2 = models.ForeignKey(BallInstance, on_delete=models.SET_NULL, null=True, related_name="merge_source2")
+    result_ball = models.ForeignKey(BallInstance, on_delete=models.SET_NULL, null=True, related_name="merge_results")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

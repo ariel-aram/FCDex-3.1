@@ -1,21 +1,17 @@
 from __future__ import annotations
 
 import logging
-import random
-from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-from bd_models.models import BallInstance, Player, balls
-from ballsdex.core.utils.buttons import ConfirmChoiceView
-from ballsdex.core.utils.transformers import BallInstanceTransform, ModelTransformer
+from ballsdex.core.utils.transformers import ModelTransformer
+from bd_models.models import Player
 from fcdex_3_0.fcdex_ext.services import check_achievements, claim_achievement, get_or_create_stats
 from fcdex_3_0.fcdex_ext.views import build_achievement_layout
 from fcdex_3_0.models import Achievement, PlayerAchievement
-from settings.models import settings
 
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
@@ -44,18 +40,19 @@ class AchievementCog(commands.GroupCog, group_name="achievement"):
     @app_commands.command(name="list", description="Browse available achievements")
     async def list_achievements(self, interaction: discord.Interaction):
         lines: list[str] = []
-        async for achievement in Achievement.objects.filter(enabled=True, hidden=False).order_by("name"):
+        async for achievement in (
+            Achievement.objects.filter(enabled=True, hidden=False).select_related("reward_ball").order_by("name")
+        ):
+            reward = achievement.reward_ball
             lines.append(
                 f"{achievement.emoji} **{achievement.name}** — {achievement.description}\n"
                 f"-# Requires {achievement.required_count} · "
-                f"Reward: {achievement.reward_money:,} coins"
-                + (f" + {achievement.reward_ball.country}" if achievement.reward_ball_id else "")
+                f"Reward: {achievement.reward_money:,} coins" + (f" + {reward.country}" if reward else "")
             )
 
         if not lines:
             await interaction.response.send_message(
-                "No achievements configured yet. Ask an admin to add some!",
-                ephemeral=True,
+                "No achievements configured yet. Ask an admin to add some!", ephemeral=True
             )
             return
 
@@ -71,18 +68,17 @@ class AchievementCog(commands.GroupCog, group_name="achievement"):
         await check_achievements(player)
 
         lines: list[str] = []
-        async for player_achievement in PlayerAchievement.objects.filter(player=player).select_related(
-            "achievement"
-        ):
+        async for player_achievement in PlayerAchievement.objects.filter(player=player).select_related("achievement"):
             ach = player_achievement.achievement
             if ach.hidden and target.id != interaction.user.id:
                 continue
-            status = "✅ Claimed" if player_achievement.claimed_at else (
-                "🎉 Ready to claim" if player_achievement.unlocked_at else "⏳ In progress"
+            status = (
+                "✅ Claimed"
+                if player_achievement.claimed_at
+                else ("🎉 Ready to claim" if player_achievement.unlocked_at else "⏳ In progress")
             )
             lines.append(
-                f"{ach.emoji} **{ach.name}** — {player_achievement.progress}/{ach.required_count}\n"
-                f"-# {status}"
+                f"{ach.emoji} **{ach.name}** — {player_achievement.progress}/{ach.required_count}\n-# {status}"
             )
 
         stats = await get_or_create_stats(player)
@@ -96,12 +92,8 @@ class AchievementCog(commands.GroupCog, group_name="achievement"):
         await interaction.response.send_message(view=layout, ephemeral=True)
 
     @app_commands.command(name="claim", description="Claim a completed achievement reward")
-    async def claim(
-        self,
-        interaction: discord.Interaction,
-        achievement: AchievementTransform,
-    ):
+    async def claim(self, interaction: discord.Interaction, achievement: AchievementTransform):  # pyright: ignore[reportInvalidTypeForm]
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
         await check_achievements(player)
-        success, message = await claim_achievement(player, achievement)
+        _success, message = await claim_achievement(player, achievement)
         await interaction.response.send_message(message, ephemeral=True)

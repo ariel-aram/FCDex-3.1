@@ -7,9 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     initial = True
 
-    dependencies = [
-        ("bd_models", "0015_alter_ballinstance_server_id_and_more"),
-    ]
+    dependencies = [("bd_models", "0015_alter_ballinstance_server_id_and_more")]
 
     operations = [
         migrations.CreateModel(
@@ -40,10 +38,7 @@ class Migration(migrations.Migration):
                 (
                     "reward_ball",
                     models.ForeignKey(
-                        blank=True,
-                        null=True,
-                        on_delete=django.db.models.deletion.SET_NULL,
-                        to="bd_models.ball",
+                        blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to="bd_models.ball"
                     ),
                 ),
             ],
@@ -61,16 +56,11 @@ class Migration(migrations.Migration):
                 (
                     "player",
                     models.OneToOneField(
-                        on_delete=django.db.models.deletion.CASCADE,
-                        related_name="fcdex_stats",
-                        to="bd_models.player",
+                        on_delete=django.db.models.deletion.CASCADE, related_name="fcdex_stats", to="bd_models.player"
                     ),
                 ),
             ],
-            options={
-                "verbose_name": "FCDex player stats",
-                "verbose_name_plural": "FCDex player stats",
-            },
+            options={"verbose_name": "FCDex player stats", "verbose_name_plural": "FCDex player stats"},
         ),
         migrations.CreateModel(
             name="Tournament",
@@ -143,9 +133,7 @@ class Migration(migrations.Migration):
                 (
                     "player",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE,
-                        related_name="merge_logs",
-                        to="bd_models.player",
+                        on_delete=django.db.models.deletion.CASCADE, related_name="merge_logs", to="bd_models.player"
                     ),
                 ),
                 (
@@ -185,13 +173,7 @@ class Migration(migrations.Migration):
             name="TournamentRegistration",
             fields=[
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                (
-                    "group",
-                    models.CharField(
-                        choices=[("legacy", "Legacy"), ("main", "Main")],
-                        max_length=8,
-                    ),
-                ),
+                ("group", models.CharField(choices=[("legacy", "Legacy"), ("main", "Main")], max_length=8)),
                 ("score", models.IntegerField(default=0)),
                 ("eliminated", models.BooleanField(default=False)),
                 ("semifinal_eligible", models.BooleanField(default=True)),
@@ -221,21 +203,13 @@ class Migration(migrations.Migration):
                 (
                     "round",
                     models.CharField(
-                        choices=[
-                            ("group", "Group"),
-                            ("semifinal", "Semifinal"),
-                            ("final", "Final"),
-                        ],
-                        max_length=12,
+                        choices=[("group", "Group"), ("semifinal", "Semifinal"), ("final", "Final")], max_length=12
                     ),
                 ),
                 (
                     "group",
                     models.CharField(
-                        blank=True,
-                        choices=[("legacy", "Legacy"), ("main", "Main")],
-                        max_length=8,
-                        null=True,
+                        blank=True, choices=[("legacy", "Legacy"), ("main", "Main")], max_length=8, null=True
                     ),
                 ),
                 ("score1", models.IntegerField(default=0)),
@@ -263,9 +237,7 @@ class Migration(migrations.Migration):
                 (
                     "tournament",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE,
-                        related_name="matches",
-                        to="fcdex_3_0.tournament",
+                        on_delete=django.db.models.deletion.CASCADE, related_name="matches", to="fcdex_3_0.tournament"
                     ),
                 ),
                 (

@@ -4,10 +4,10 @@ import io
 from typing import TYPE_CHECKING
 
 import discord
-from discord.ui import ActionRow, Button, Container, Section, Separator, TextDisplay, button
+from discord.ui import ActionRow, Button, Container, Separator, TextDisplay, button
 
 from ballsdex.core.discord import LayoutView
-from fcdex_3_0.fcdex_ext.battle_engine import BattleBall, BattleInstance
+from fcdex_3_0.fcdex_ext.battle_engine import BattleBall
 from settings.models import settings
 
 if TYPE_CHECKING:
@@ -17,10 +17,7 @@ if TYPE_CHECKING:
 def format_deck(balls: list[BattleBall]) -> str:
     if not balls:
         return "*Empty deck*"
-    lines = [
-        f"- {ball.emoji} **{ball.name}** — HP {ball.health} / ATK {ball.attack}"
-        for ball in balls
-    ]
+    lines = [f"- {ball.emoji} **{ball.name}** — HP {ball.health} / ATK {ball.attack}" for ball in balls]
     text = "\n".join(lines)
     return text[:950] + "\n…" if len(text) > 1024 else text
 
@@ -55,38 +52,26 @@ class BattleLayoutView(LayoutView):
         opponent_ready = "✅" if battle.opponent_ready else "⏳"
 
         container.add_item(
-            Section(
-                TextDisplay(
-                    f"# ⚔️ {settings.plural_collectible_name.title()} Battle\n"
-                    f"{battle.author.mention} vs {battle.opponent.mention}\n\n"
-                    f"Use `/battle all` or `/battle best` to fill your deck, "
-                    f"then press **Ready** when done."
-                ),
-                accessory=None,
+            TextDisplay(
+                f"# ⚔️ {settings.plural_collectible_name.title()} Battle\n"
+                f"{battle.author.mention} vs {battle.opponent.mention}\n\n"
+                f"Use `/battle all` or `/battle best` to fill your deck, "
+                f"then press **Ready** when done."
             )
         )
         container.add_item(Separator())
         container.add_item(
-            TextDisplay(
-                f"### {author_ready} {battle.author.display_name}\n"
-                f"{format_deck(battle.instance.p1_balls)}"
-            )
+            TextDisplay(f"### {author_ready} {battle.author.display_name}\n{format_deck(battle.instance.p1_balls)}")
         )
         container.add_item(Separator())
         container.add_item(
-            TextDisplay(
-                f"### {opponent_ready} {battle.opponent.display_name}\n"
-                f"{format_deck(battle.instance.p2_balls)}"
-            )
+            TextDisplay(f"### {opponent_ready} {battle.opponent.display_name}\n{format_deck(battle.instance.p2_balls)}")
         )
         container.add_item(controls)
         self.add_item(container)
 
 
-def build_battle_result_layout(
-    battle: ActiveBattle,
-    log_lines: list[str],
-) -> LayoutView:
+def build_battle_result_layout(battle: ActiveBattle, log_lines: list[str]) -> LayoutView:
     layout = LayoutView()
     container = Container()
 
@@ -130,4 +115,4 @@ def build_tournament_layout(title: str, sections: list[str]) -> LayoutView:
 
 
 def battle_log_file(log_lines: list[str]) -> discord.File:
-    return discord.File(io.StringIO("\n".join(log_lines)), filename="battle-log.txt")
+    return discord.File(io.BytesIO("\n".join(log_lines).encode()), filename="battle-log.txt")

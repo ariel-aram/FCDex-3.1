@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from django.utils import timezone
 
 from bd_models.models import Ball, BallInstance, Player
 from fcdex_3_0.models import Achievement, AchievementType, PlayerAchievement, PlayerStats
-
-if TYPE_CHECKING:
-    from ballsdex.core.bot import BallsDexBot
 
 
 async def get_or_create_stats(player: Player) -> PlayerStats:
@@ -37,14 +32,14 @@ async def check_achievements(player: Player) -> None:
         AchievementType.BALLS_OWNED: ball_count,
     }
 
-    async for achievement in Achievement.objects.filter(enabled=True).exclude(
-        achievement_type=AchievementType.CUSTOM
-    ):
-        progress = stat_map.get(achievement.achievement_type, 0)
+    async for achievement in Achievement.objects.filter(enabled=True).exclude(achievement_type=AchievementType.CUSTOM):
+        try:
+            achievement_type = AchievementType(achievement.achievement_type)
+        except ValueError:
+            continue
+        progress = stat_map.get(achievement_type, 0)
         player_achievement, created = await PlayerAchievement.objects.aget_or_create(
-            player=player,
-            achievement=achievement,
-            defaults={"progress": progress},
+            player=player, achievement=achievement, defaults={"progress": progress}
         )
         if not created and player_achievement.progress != progress:
             player_achievement.progress = progress
@@ -74,10 +69,7 @@ async def claim_achievement(player: Player, achievement: Achievement) -> tuple[b
 
     if achievement.reward_ball_id:
         await BallInstance.objects.acreate(
-            ball_id=achievement.reward_ball_id,
-            player=player,
-            attack_bonus=0,
-            health_bonus=0,
+            ball_id=achievement.reward_ball_id, player=player, attack_bonus=0, health_bonus=0
         )
 
     player_achievement.claimed_at = timezone.now()

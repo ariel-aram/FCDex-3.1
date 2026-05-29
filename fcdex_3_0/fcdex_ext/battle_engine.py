@@ -38,10 +38,7 @@ def attack(current_ball: BattleBall, enemy_balls: list[BattleBall]) -> str:
     if enemy.health <= 0:
         enemy.health = 0
         enemy.dead = True
-        return (
-            f"{current_ball.owner}'s {current_ball.name} has eliminated "
-            f"{enemy.owner}'s {enemy.name}!"
-        )
+        return f"{current_ball.owner}'s {current_ball.name} has eliminated {enemy.owner}'s {enemy.name}!"
     return (
         f"{current_ball.owner}'s {current_ball.name} dealt {attack_dealt} damage to "
         f"{enemy.owner}'s {enemy.name} ({enemy.health} HP left)."

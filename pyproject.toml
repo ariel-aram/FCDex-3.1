@@ -26,3 +26,46 @@ Issues = "https://github.com/TheFCProject/FCDex-3.0/issues"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["fcdex_3_0*"]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.14.1",
+  "pyright>=1.1.406",
+  "django>=6.0",
+  "django-types",
+]
+
+[tool.ruff]
+line-length = 120
+indent-width = 4
+target-version = "py312"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = true
+line-ending = "lf"
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E203"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["fcdex_3_0", "ballsdex", "bd_models", "settings"]
+split-on-trailing-comma = false
+
+[tool.pyright]
+extraPaths = [".", ".vendor/ballsdex/admin_panel", ".vendor/ballsdex"]
+pythonVersion = "3.12"
+reportIncompatibleMethodOverride = "warning"
+reportIncompatibleVariableOverride = "warning"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"
+
+[[tool.pyright.executionEnvironments]]
+root = "fcdex_3_0/fcdex_ext"
+extraPaths = [".", ".vendor/ballsdex/admin_panel", ".vendor/ballsdex"]
+reportAttributeAccessIssue = false
+reportInvalidTypeForm = false

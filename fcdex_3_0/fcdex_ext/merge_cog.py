@@ -9,9 +9,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from bd_models.models import BallInstance, Player, balls
 from ballsdex.core.utils.buttons import ConfirmChoiceView
 from ballsdex.core.utils.transformers import BallInstanceTransform
+from bd_models.models import BallInstance, Player, balls
 from fcdex_3_0.fcdex_ext.services import increment_stat
 from fcdex_3_0.models import MergeLog
 from settings.models import settings
@@ -31,14 +31,12 @@ class MergeCog(commands.GroupCog, group_name="merge"):
     @app_commands.command(name="clubs", description="Merge two clubballs into a random new clubball")
     async def merge_clubs(
         self,
-        interaction: discord.Interaction,
+        interaction: discord.Interaction["BallsDexBot"],
         first: BallInstanceTransform,
         second: BallInstanceTransform,
     ):
         if first.pk == second.pk:
-            await interaction.response.send_message(
-                "You need two different clubballs to merge.", ephemeral=True
-            )
+            await interaction.response.send_message("You need two different clubballs to merge.", ephemeral=True)
             return
 
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
@@ -49,9 +47,7 @@ class MergeCog(commands.GroupCog, group_name="merge"):
             return
 
         if await first.is_locked() or await second.is_locked():
-            await interaction.response.send_message(
-                "One of these cards is locked for a trade.", ephemeral=True
-            )
+            await interaction.response.send_message("One of these cards is locked for a trade.", ephemeral=True)
             return
 
         enabled = [b for b in balls.values() if b.enabled]
@@ -61,11 +57,7 @@ class MergeCog(commands.GroupCog, group_name="merge"):
             )
             return
 
-        view = ConfirmChoiceView(
-            interaction,
-            accept_message="Merge confirmed!",
-            cancel_message="Merge cancelled.",
-        )
+        view = ConfirmChoiceView(interaction, accept_message="Merge confirmed!", cancel_message="Merge cancelled.")
         await interaction.response.send_message(
             f"Merge `{first.short_description()}` + `{second.short_description()}` "
             f"into a **random** {settings.collectible_name}?\n"
@@ -94,12 +86,7 @@ class MergeCog(commands.GroupCog, group_name="merge"):
             server_id=interaction.guild_id,
         )
 
-        await MergeLog.objects.acreate(
-            player=player,
-            source_ball1=first,
-            source_ball2=second,
-            result_ball=new_instance,
-        )
+        await MergeLog.objects.acreate(player=player, source_ball1=first, source_ball2=second, result_ball=new_instance)
         await increment_stat(player, "merges_completed")
 
         with ThreadPoolExecutor() as pool:
