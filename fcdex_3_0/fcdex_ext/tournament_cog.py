@@ -37,6 +37,9 @@ class TournamentTransformer(TTLModelTransformer[Tournament]):
     def get_queryset(self):
         return super().get_queryset().exclude(status=TournamentStatus.COMPLETED)
 
+    async def get_from_pk(self, value: int) -> Tournament:
+        return await self.get_queryset().select_related("host").aget(pk=value)
+
 
 TournamentTransform = app_commands.Transform[Tournament, TournamentTransformer]
 
@@ -207,7 +210,12 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
         if tournament.status == TournamentStatus.GROUP_STAGE:
             eliminated = 0
             for group in TournamentGroup:
-                regs = [r async for r in tournament.registrations.filter(group=group.value).order_by("-score")]
+                regs = [
+                    r
+                    async for r in tournament.registrations.filter(group=group.value)
+                    .select_related("player")
+                    .order_by("-score")
+                ]
                 if len(regs) <= 1:
                     continue
                 cutoff_index = max(1, len(regs) // 2)
@@ -236,7 +244,9 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
 
         if tournament.status == TournamentStatus.SEMIFINALS:
             winners: list[Player] = []
-            async for match in tournament.matches.filter(round=TournamentRound.SEMIFINAL, completed=False):
+            async for match in tournament.matches.filter(
+                round=TournamentRound.SEMIFINAL, completed=False
+            ).select_related("player1", "player2"):
                 if match.player2 is None:
                     continue
                 winner = random.choice([match.player1, match.player2])
@@ -259,7 +269,11 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
             return
 
         if tournament.status == TournamentStatus.FINALS:
-            final = await tournament.matches.filter(round=TournamentRound.FINAL, completed=False).afirst()
+            final = (
+                await tournament.matches.filter(round=TournamentRound.FINAL, completed=False)
+                .select_related("player1", "player2")
+                .afirst()
+            )
             if not final or not final.player2:
                 await interaction.response.send_message("No pending final match found.", ephemeral=True)
                 return

@@ -88,6 +88,7 @@ class Tournament(models.Model):
     name = models.CharField(max_length=64, unique=True)
     description = models.TextField(blank=True, default="")
     host = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="hosted_tournaments")
+    host_id: int
     status = models.CharField(max_length=16, choices=TournamentStatus.choices, default=TournamentStatus.REGISTRATION)
     semifinal_cutoff = models.PositiveIntegerField(
         default=0, help_text="Minimum group score required to reach semifinals. Lowest scorers are eliminated."
@@ -105,6 +106,7 @@ class Tournament(models.Model):
 
 class TournamentRegistration(models.Model):
     tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name="registrations")
+    tournament_id: int
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="tournament_registrations")
     player_id: int
     group = models.CharField(max_length=8, choices=TournamentGroup.choices)
@@ -116,11 +118,12 @@ class TournamentRegistration(models.Model):
         unique_together = ("tournament", "player")
 
     def __str__(self) -> str:
-        return f"{self.player_id} in {self.tournament.name} ({self.group})"
+        return f"{self.player_id} in tournament #{self.tournament_id} ({self.group})"
 
 
 class TournamentMatch(models.Model):
     tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name="matches")
+    tournament_id: int
     round = models.CharField(max_length=12, choices=TournamentRound.choices)
     group = models.CharField(max_length=8, choices=TournamentGroup.choices, null=True, blank=True)
     player1 = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="tournament_matches_as_p1")
@@ -137,7 +140,7 @@ class TournamentMatch(models.Model):
         ordering = ("created_at",)
 
     def __str__(self) -> str:
-        return f"{self.tournament.name} - {self.round} #{self.pk}"
+        return f"{self.tournament_id} - {self.round} #{self.pk}"
 
 
 class MergeLog(models.Model):
