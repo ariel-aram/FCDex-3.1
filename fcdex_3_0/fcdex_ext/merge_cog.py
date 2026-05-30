@@ -76,6 +76,20 @@ class MergeCog(commands.GroupCog, group_name="merge"):
         if view.value is not True:
             return
 
+        first = await BallInstance.objects.aget(pk=first.pk)
+        second = await BallInstance.objects.aget(pk=second.pk)
+        if first.deleted or second.deleted:
+            await interaction.followup.send("One of these cards is no longer available.", ephemeral=True)
+            return
+        if first.player_id != player.pk or second.player_id != player.pk:
+            await interaction.followup.send(
+                f"Both {settings.plural_collectible_name} must belong to you.", ephemeral=True
+            )
+            return
+        if await first.is_locked() or await second.is_locked():
+            await interaction.followup.send("One of these cards is locked for a trade.", ephemeral=True)
+            return
+
         result_ball = random.choices(enabled, weights=[b.rarity for b in enabled], k=1)[0]
         attack_bonus = random.randint(-settings.max_attack_bonus, settings.max_attack_bonus)
         health_bonus = random.randint(-settings.max_health_bonus, settings.max_health_bonus)
@@ -101,7 +115,6 @@ class MergeCog(commands.GroupCog, group_name="merge"):
 
         result_label = await format_instance(new_instance)
         await interaction.followup.send(
-            f"✨ Merge complete! You received `{result_label}` "
-            f"(`{attack_bonus:+}%`/`{health_bonus:+}%`).",
+            f"✨ Merge complete! You received `{result_label}` (`{attack_bonus:+}%`/`{health_bonus:+}%`).",
             file=discord.File(buffer, "card.webp"),
         )

@@ -68,8 +68,7 @@ async def claim_achievement(player: Player, achievement: Achievement) -> tuple[b
 
     if not player_achievement.unlocked_at or not achievement_is_complete(player_achievement, achievement):
         return False, (
-            f"This achievement is not complete yet "
-            f"({player_achievement.progress}/{achievement.required_count})."
+            f"This achievement is not complete yet ({player_achievement.progress}/{achievement.required_count})."
         )
 
     if player_achievement.claimed_at:

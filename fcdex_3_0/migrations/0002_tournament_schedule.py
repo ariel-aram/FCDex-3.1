@@ -18,27 +18,21 @@ class Migration(migrations.Migration):
             model_name="tournament",
             name="scheduled_end_at",
             field=models.DateTimeField(
-                blank=True,
-                help_text="Planned end — no new joins or score updates after this time.",
-                null=True,
+                blank=True, help_text="Planned end — no new joins or score updates after this time.", null=True
             ),
         ),
         migrations.AlterField(
             model_name="tournament",
             name="ended_at",
             field=models.DateTimeField(
-                blank=True,
-                help_text="Actual time the tournament was completed via /tournament advance.",
-                null=True,
+                blank=True, help_text="Actual time the tournament was completed via /tournament advance.", null=True
             ),
         ),
         migrations.AlterField(
             model_name="tournament",
             name="started_at",
             field=models.DateTimeField(
-                blank=True,
-                help_text="Actual time the group stage was started via /tournament start.",
-                null=True,
+                blank=True, help_text="Actual time the group stage was started via /tournament start.", null=True
             ),
         ),
     ]

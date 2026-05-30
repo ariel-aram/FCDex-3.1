@@ -6,14 +6,14 @@ Official **FCDex 3.0** feature pack for [BallsDex V3](https://github.com/Ballsde
 
 ### ⚔️ Battle System
 
-Challenge friends to clubball battles. Fill your deck randomly or with your strongest cards, then fight until one player stands.
+Challenge friends to clubball matches. Pick lineups from the match panel, lock in, and watch live commentary.
 
 | Command | Description |
 | ------- | ----------- |
-| `/battle challenge @user` | Challenge a friend to a battle |
-| `/battle all` | Fill your deck with random clubballs |
-| `/battle best` | Fill your deck with your strongest clubballs |
-| `/battle add` / `/battle remove` | Manually manage your battle deck |
+| `/battle challenge @user` | Start a match (Components v2 panel) |
+| `/battle card` | Add or remove a specific clubball from your lineup |
+
+Lineup buttons on the match panel: **Random**, **Strongest**, **Clear**, **Lock Selection**, **Cancel Match**.
 
 ### 🏟️ Tournaments
 
@@ -21,14 +21,9 @@ Legacy & Main group tournaments with registration, group stage scoring, semifina
 
 | Command | Description |
 | ------- | ----------- |
-| `/tournament manage` | Ephemeral admin panel: create, edit, delete, announce (Manage Server) |
-| `/tournament join` | Join as Legacy or Main group |
-| `/tournament info` | Tournament details |
-| `/tournament standings` | Group leaderboards |
+| `/tournament manage` | Ephemeral admin hub — create, edit, host, delete, announce |
+| `/tournament view` | Player hub — overview, standings, bracket, join |
 | `/tournament score` | Report match points |
-| `/tournament start` | Begin group stage (Manage Server) |
-| `/tournament advance` | Move to semifinals/finals (Manage Server) |
-| `/tournament bracket` | View bracket |
 
 ### 🏅 Achievements
 
@@ -36,9 +31,7 @@ Player achievements with progress tracking and claimable rewards (coins / clubba
 
 | Command | Description |
 | ------- | ----------- |
-| `/achievement list` | Browse achievements |
-| `/achievement progress` | View your (or another player's) progress |
-| `/achievement claim` | Claim a completed achievement |
+| `/achievement menu` | Ephemeral hub — catalog, progress, claim |
 
 Configure achievements in the **admin panel** under FCDex 3.0.
 
@@ -60,7 +53,7 @@ Add to `config/extra.toml` in your BallsDex directory:
 
 ```toml
 [[ballsdex.packages]]
-location = "git+https://github.com/ariel-aram/FCDex-3.0.git@1.1.0"
+location = "git+https://github.com/ariel-aram/FCDex-3.0.git@1.2.1"
 path = "fcdex_3_0"
 enabled = true
 ```

@@ -30,6 +30,7 @@ class ActiveBattle:
     interaction: discord.Interaction
     author: discord.Member
     opponent: discord.Member
+    bot: BallsDexBot
     instance: BattleInstance = field(default_factory=BattleInstance)
     author_ready: bool = False
     opponent_ready: bool = False
@@ -55,12 +56,6 @@ class ActiveBattle:
         self.finished = True
         while self in _active_battles:
             _active_battles.remove(self)
-
-    async def refresh_message(self):
-        if not self.is_active:
-            return
-        layout = BattleLayoutView(self)
-        await self.interaction.edit_original_response(view=layout, attachments=[])
 
     async def _reject_inactive(self, interaction: discord.Interaction) -> bool:
         if self.is_active and self in _active_battles:
@@ -147,9 +142,7 @@ class ActiveBattle:
         self.terminate()
         await interaction.response.edit_message(
             view=BattleLayoutView(
-                self,
-                banner=f"**Match cancelled** — ended by {interaction.user.mention}.",
-                interactive=False,
+                self, banner=f"**Match cancelled** — ended by {interaction.user.mention}.", interactive=False
             ),
             attachments=[],
         )
@@ -177,16 +170,80 @@ async def ball_instance_to_battle_ball(instance: BallInstance, owner: str, bot: 
     )
 
 
+def _lineup_locked(battle: ActiveBattle, user: discord.User | discord.Member) -> bool:
+    return battle.author_ready if user.id == battle.author.id else battle.opponent_ready
+
+
+async def apply_lineup_mode(battle: ActiveBattle, interaction: discord.Interaction, *, mode: str) -> str | None:
+    if battle.is_active is False or battle not in _active_battles:
+        return "This match is no longer active."
+    if not battle.involves(interaction.user):
+        return "You aren't in this match."
+    if interaction.guild_id != battle.interaction.guild_id:
+        return "You must be in the same server as your match."
+    if _lineup_locked(battle, interaction.user):
+        return "You can't change your lineup after locking in."
+
+    player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
+    instances = [x async for x in BallInstance.objects.filter(player=player, deleted=False)]
+    if not instances:
+        return f"You don't have any {settings.plural_collectible_name}."
+
+    deck = battle.deck_for(interaction.user)
+    deck.clear()
+
+    if mode == "all":
+        chosen = random.sample(instances, min(5, len(instances)))
+    elif mode == "best":
+        scored: list[tuple[int, BallInstance]] = []
+        for instance in instances:
+            ball = await get_ball(instance)
+            power = instance_attack(instance, ball) + instance_health(instance, ball)
+            scored.append((power, instance))
+        chosen = [instance for _, instance in sorted(scored, key=lambda item: item[0], reverse=True)[:5]]
+    else:
+        return "Unknown lineup mode."
+
+    seen: set[int] = set()
+    for instance in chosen:
+        if instance.pk in seen:
+            continue
+        seen.add(instance.pk)
+        deck.append(await ball_instance_to_battle_ball(instance, interaction.user.display_name, battle.bot))
+
+    return f"Lineup set — **{len(deck)}** {settings.plural_collectible_name} ({mode})."
+
+
+async def clear_lineup(battle: ActiveBattle, interaction: discord.Interaction) -> str | None:
+    if battle.is_active is False or battle not in _active_battles:
+        return "This match is no longer active."
+    if not battle.involves(interaction.user):
+        return "You aren't in this match."
+    if _lineup_locked(battle, interaction.user):
+        return "You can't change your lineup after locking in."
+    battle.deck_for(interaction.user).clear()
+    return "Lineup cleared."
+
+
+async def refresh_battle_message(battle: ActiveBattle) -> None:
+    if not battle.is_active:
+        return
+    try:
+        await battle.interaction.edit_original_response(view=BattleLayoutView(battle))
+    except discord.HTTPException:
+        log.exception("Failed to refresh battle layout")
+
+
 class BattleCog(commands.GroupCog, group_name="battle"):
     """Challenge friends to clubball battles."""
 
     def __init__(self, bot: BallsDexBot):
         self.bot = bot
 
-    @app_commands.command(name="challenge", description="Challenge a friend to a battle")
+    @app_commands.command(name="challenge", description="Challenge a friend to a clubball match")
     async def challenge(self, interaction: discord.Interaction, opponent: discord.Member):
         if not isinstance(interaction.user, discord.Member):
-            await interaction.response.send_message("Battles can only be started in a server.", ephemeral=True)
+            await interaction.response.send_message("Matches can only be started in a server.", ephemeral=True)
             return
         if opponent.bot:
             await interaction.response.send_message("You can't battle bots.", ephemeral=True)
@@ -195,135 +252,62 @@ class BattleCog(commands.GroupCog, group_name="battle"):
             await interaction.response.send_message("You can't battle yourself.", ephemeral=True)
             return
         if fetch_battle(interaction.user) or fetch_battle(opponent):
-            await interaction.response.send_message("One of you is already in a battle.", ephemeral=True)
+            await interaction.response.send_message("One of you is already in a match.", ephemeral=True)
             return
 
         author = interaction.user
-        battle = ActiveBattle(interaction, author, opponent)
+        battle = ActiveBattle(interaction, author, opponent, self.bot)
         _active_battles.append(battle)
 
         await interaction.response.send_message(
-            view=BattleLayoutView(
-                battle,
-                banner=f"{author.mention} has challenged {opponent.mention} to a match!",
-            ),  # pyright: ignore[reportArgumentType]
+            view=BattleLayoutView(battle, banner=f"{author.mention} has challenged {opponent.mention} to a match!")  # pyright: ignore[reportArgumentType]
         )
 
-    async def _fill_deck(self, interaction: discord.Interaction, *, mode: str):
+    @app_commands.command(name="card", description="Add or remove a clubball from your match lineup")
+    @app_commands.choices(
+        action=[
+            app_commands.Choice(name="Add to lineup", value="add"),
+            app_commands.Choice(name="Remove from lineup", value="remove"),
+        ]
+    )
+    async def card(
+        self, interaction: discord.Interaction, clubball: BallInstanceTransform, action: app_commands.Choice[str]
+    ):
         battle = fetch_battle(interaction.user)
         if battle is None or not battle.is_active:
             await interaction.response.send_message("You aren't in an active match.", ephemeral=True)
             return
-
-        if interaction.guild_id != battle.interaction.guild_id:
-            await interaction.response.send_message("You must be in the same server as your battle.", ephemeral=True)
-            return
-
-        ready = battle.author_ready if interaction.user.id == battle.author.id else battle.opponent_ready
-        if ready:
+        if _lineup_locked(battle, interaction.user):
             await interaction.response.send_message("You can't change your lineup after locking in.", ephemeral=True)
             return
 
+        deck = battle.deck_for(interaction.user)
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
-        queryset = BallInstance.objects.filter(player=player, deleted=False)
-
-        instances = [x async for x in queryset]
-        if not instances:
-            await interaction.response.send_message(
-                f"You don't have any {settings.plural_collectible_name}.", ephemeral=True
-            )
-            return
-
-        deck = battle.deck_for(interaction.user)
-        deck.clear()
-
-        if mode == "all":
-            count = min(5, len(instances))
-            chosen = random.sample(instances, count)
-        elif mode == "best":
-            scored: list[tuple[int, BallInstance]] = []
-            for instance in instances:
-                ball = await get_ball(instance)
-                power = instance_attack(instance, ball) + instance_health(instance, ball)
-                scored.append((power, instance))
-            chosen = [instance for _, instance in sorted(scored, key=lambda item: item[0], reverse=True)[:5]]
+        if action.value == "add":
+            if clubball.deleted:
+                await interaction.response.send_message("That card is no longer available.", ephemeral=True)
+                return
+            if clubball.player_id != player.pk:
+                await interaction.response.send_message(
+                    f"That {settings.collectible_name} doesn't belong to you.", ephemeral=True
+                )
+                return
+            if len(deck) >= 5:
+                await interaction.response.send_message("Your lineup is full (max 5).", ephemeral=True)
+                return
+            ball = await ball_instance_to_battle_ball(clubball, interaction.user.display_name, self.bot)
+            if any(x.instance_id == ball.instance_id for x in deck):
+                await interaction.response.send_message("That card is already in your lineup.", ephemeral=True)
+                return
+            deck.append(ball)
+            label = await format_instance(clubball)
+            await interaction.response.send_message(f"Added `{label}`.", ephemeral=True)
         else:
-            await interaction.response.send_message("Unknown deck mode.", ephemeral=True)
-            return
+            before = len(deck)
+            deck[:] = [x for x in deck if x.instance_id != clubball.pk]
+            if len(deck) == before:
+                await interaction.response.send_message("That card isn't in your lineup.", ephemeral=True)
+                return
+            await interaction.response.send_message(f"Removed `{await format_instance(clubball)}`.", ephemeral=True)
 
-        seen: set[int] = set()
-        for instance in chosen:
-            if instance.pk in seen:
-                continue
-            seen.add(instance.pk)
-            deck.append(await ball_instance_to_battle_ball(instance, interaction.user.display_name, self.bot))
-
-        await interaction.response.send_message(
-            f"Lineup updated with **{len(deck)}** {settings.plural_collectible_name} ({mode})!", ephemeral=True
-        )
-
-        if not battle.is_active:
-            return
-        try:
-            await battle.interaction.edit_original_response(view=BattleLayoutView(battle))
-        except discord.HTTPException:
-            log.exception("Failed to refresh battle layout")
-
-    @app_commands.command(name="all", description="Fill your deck with random clubballs")
-    async def all_balls(self, interaction: discord.Interaction):
-        await self._fill_deck(interaction, mode="all")
-
-    @app_commands.command(name="best", description="Fill your deck with your strongest clubballs")
-    async def best_balls(self, interaction: discord.Interaction):
-        await self._fill_deck(interaction, mode="best")
-
-    @app_commands.command(name="add", description="Add a specific clubball to your battle deck")
-    async def add_ball(self, interaction: discord.Interaction, clubball: BallInstanceTransform):
-        battle = fetch_battle(interaction.user)
-        if battle is None or not battle.is_active:
-            await interaction.response.send_message("You aren't in an active match.", ephemeral=True)
-            return
-
-        ready = battle.author_ready if interaction.user.id == battle.author.id else battle.opponent_ready
-        if ready:
-            await interaction.response.send_message("You can't change your lineup after locking in.", ephemeral=True)
-            return
-
-        deck = battle.deck_for(interaction.user)
-        if len(deck) >= 5:
-            await interaction.response.send_message("Your lineup is full (max 5).", ephemeral=True)
-            return
-
-        ball = await ball_instance_to_battle_ball(clubball, interaction.user.display_name, self.bot)
-        if any(x.instance_id == ball.instance_id for x in deck):
-            await interaction.response.send_message("That card is already in your lineup.", ephemeral=True)
-            return
-
-        deck.append(ball)
-        label = await format_instance(clubball)
-        await interaction.response.send_message(f"Added `{label}`.", ephemeral=True)
-        if battle.is_active:
-            await battle.interaction.edit_original_response(view=BattleLayoutView(battle))
-
-    @app_commands.command(name="remove", description="Remove a clubball from your battle deck")
-    async def remove_ball(self, interaction: discord.Interaction, clubball: BallInstanceTransform):
-        battle = fetch_battle(interaction.user)
-        if battle is None or not battle.is_active:
-            await interaction.response.send_message("You aren't in an active match.", ephemeral=True)
-            return
-
-        ready = battle.author_ready if interaction.user.id == battle.author.id else battle.opponent_ready
-        if ready:
-            await interaction.response.send_message("You can't change your lineup after locking in.", ephemeral=True)
-            return
-
-        deck = battle.deck_for(interaction.user)
-        before = len(deck)
-        deck[:] = [x for x in deck if x.instance_id != clubball.pk]
-        if len(deck) == before:
-            await interaction.response.send_message("That card isn't in your lineup.", ephemeral=True)
-            return
-
-        await interaction.response.send_message(f"Removed `{await format_instance(clubball)}`.", ephemeral=True)
-        if battle.is_active:
-            await battle.interaction.edit_original_response(view=BattleLayoutView(battle))
+        await refresh_battle_message(battle)

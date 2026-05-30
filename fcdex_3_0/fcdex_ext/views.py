@@ -22,29 +22,86 @@ def truncate_text(text: str, limit: int = TEXT_DISPLAY_LIMIT) -> str:
     return text[: limit - 1] + "…"
 
 
+def build_panel_layout(
+    *, title: str, subtitle: str = "", sections: list[str] | None = None, footer: str = ""
+) -> LayoutView:
+    layout = LayoutView()
+    container = Container()
+    header = f"# {title}"
+    if subtitle:
+        header += f"\n-# {subtitle}"
+    container.add_item(TextDisplay(truncate_text(header)))
+    for section in sections or []:
+        container.add_item(Separator())
+        container.add_item(TextDisplay(truncate_text(section)))
+    if footer:
+        container.add_item(Separator())
+        container.add_item(TextDisplay(truncate_text(footer)))
+    layout.add_item(container)
+    return layout
+
+
 def format_lineup(balls: list[BattleBall]) -> str:
     if not balls:
-        return "No balls selected yet."
-    lines = [f"- {ball.emoji} **{ball.name}** — HP {ball.health} / ATK {ball.attack}" for ball in balls]
+        return "*No clubballs selected yet.*"
+    lines = [f"▸ {ball.emoji} **{ball.name}** · `{ball.health}` HP · `{ball.attack}` ATK" for ball in balls]
     text = "\n".join(lines)
     return text[:950] + "\n…" if len(text) > 1024 else text
 
 
-BATTLE_INSTRUCTIONS = (
-    "### Battle instructions\n"
-    "1. Use `/battle add` to pick clubballs for your lineup\n"
-    "2. Use `/battle all` for a random lineup (up to 5)\n"
-    "3. Use `/battle best` for your five strongest clubballs\n"
-    "4. When your lineup is set, press **Lock Selection**\n"
-    "5. When both players have locked, the match starts automatically\n\n"
-    "### Damage basics\n"
-    "- Base damage scales with attack power (±20% variance)\n"
-    "- 30% chance to miss each strike\n"
-    "- Full turn-by-turn **commentary** is shown when the match completes"
-)
+def _lock_badge(ready: bool) -> str:
+    return "🔒 Locked" if ready else "⏳ Picking"
 
 
-class BattleControls(ActionRow):
+class BattleLineupControls(ActionRow):
+    def __init__(self, battle: ActiveBattle):
+        super().__init__()
+        self.battle = battle
+
+    @button(label="Random", style=discord.ButtonStyle.secondary, emoji="🎲")
+    async def random_button(self, interaction: discord.Interaction, button: Button):
+        from fcdex_3_0.fcdex_ext.battle_cog import apply_lineup_mode, refresh_battle_message
+
+        if message := await apply_lineup_mode(self.battle, interaction, mode="all"):
+            if message.startswith("Lineup set"):
+                await interaction.response.send_message(message, ephemeral=True)
+                await refresh_battle_message(self.battle)
+            else:
+                await interaction.response.send_message(message, ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        await refresh_battle_message(self.battle)
+
+    @button(label="Strongest", style=discord.ButtonStyle.secondary, emoji="💪")
+    async def best_button(self, interaction: discord.Interaction, button: Button):
+        from fcdex_3_0.fcdex_ext.battle_cog import apply_lineup_mode, refresh_battle_message
+
+        if message := await apply_lineup_mode(self.battle, interaction, mode="best"):
+            if message.startswith("Lineup set"):
+                await interaction.response.send_message(message, ephemeral=True)
+                await refresh_battle_message(self.battle)
+            else:
+                await interaction.response.send_message(message, ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        await refresh_battle_message(self.battle)
+
+    @button(label="Clear", style=discord.ButtonStyle.secondary, emoji="🗑️")
+    async def clear_button(self, interaction: discord.Interaction, button: Button):
+        from fcdex_3_0.fcdex_ext.battle_cog import clear_lineup, refresh_battle_message
+
+        if message := await clear_lineup(self.battle, interaction):
+            if message == "Lineup cleared.":
+                await interaction.response.send_message(message, ephemeral=True)
+                await refresh_battle_message(self.battle)
+            else:
+                await interaction.response.send_message(message, ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        await refresh_battle_message(self.battle)
+
+
+class BattleMatchControls(ActionRow):
     def __init__(self, battle: ActiveBattle):
         super().__init__()
         self.battle = battle
@@ -53,7 +110,7 @@ class BattleControls(ActionRow):
     async def ready_button(self, interaction: discord.Interaction, button: Button):
         await self.battle.mark_ready(interaction)
 
-    @button(label="Cancel Battle", style=discord.ButtonStyle.danger, emoji="✖")
+    @button(label="Cancel Match", style=discord.ButtonStyle.danger, emoji="✖")
     async def cancel_button(self, interaction: discord.Interaction, button: Button):
         await self.battle.cancel(interaction)
 
@@ -66,90 +123,97 @@ class BattleLayoutView(LayoutView):
         self.interactive = interactive and battle.is_active
         self._build()
 
-    def _build(self):
+    def _build(self) -> None:
         self.clear_items()
         container = Container()
         battle = self.battle
-
-        locked = "🔒" if battle.author_ready else "⏳"
-        opponent_locked = "🔒" if battle.opponent_ready else "⏳"
+        collectible = settings.plural_collectible_name.title()
 
         if self.interactive:
-            header = (
-                f"{self.banner}\n\n" if self.banner else ""
-            ) + (
-                f"# ⚔️ {settings.plural_collectible_name.title()} Battle\n"
-                f"{battle.author.mention} vs {battle.opponent.mention}\n\n"
-                f"Use `/battle add`, `/battle all`, or `/battle best`, "
-                f"then press **Lock Selection** when your lineup is ready."
+            intro = (f"{self.banner}\n\n" if self.banner else "") + (
+                f"# ⚔️ {collectible} Match\n"
+                f"{battle.author.mention} **vs** {battle.opponent.mention}\n\n"
+                f"Pick your lineup with the buttons below, then **Lock Selection**.\n"
+                f"-# Use `/battle card` to add or remove a specific clubball · Max **5** per player"
             )
         else:
-            header = self.banner or "**This match has ended.**"
+            intro = self.banner or "**This match has ended.**"
 
-        container.add_item(TextDisplay(truncate_text(header)))
+        container.add_item(TextDisplay(truncate_text(intro)))
         container.add_item(Separator())
         container.add_item(
             TextDisplay(
-                f"### {locked} {battle.author.display_name}'s battle lineup\n{format_lineup(battle.instance.p1_balls)}"
+                f"### {_lock_badge(battle.author_ready)} · {battle.author.display_name}\n"
+                f"{format_lineup(battle.instance.p1_balls)}"
             )
         )
         container.add_item(Separator())
         container.add_item(
             TextDisplay(
-                f"### {opponent_locked} {battle.opponent.display_name}'s battle lineup\n"
+                f"### {_lock_badge(battle.opponent_ready)} · {battle.opponent.display_name}\n"
                 f"{format_lineup(battle.instance.p2_balls)}"
             )
         )
         if self.interactive:
             container.add_item(Separator())
-            container.add_item(TextDisplay(truncate_text(BATTLE_INSTRUCTIONS)))
-            container.add_item(BattleControls(battle))
+            container.add_item(
+                TextDisplay(
+                    "### 📋 Match rules\n"
+                    "▸ **Random** — up to 5 random clubballs\n"
+                    "▸ **Strongest** — your top 5 by ATK + HP\n"
+                    "▸ **Clear** — empty your lineup\n"
+                    "▸ 30% miss chance · damage varies ±20% from ATK"
+                )
+            )
+            container.add_item(BattleLineupControls(battle))
+            container.add_item(BattleMatchControls(battle))
         self.add_item(container)
 
 
 def build_battle_result_layout(battle: ActiveBattle, log_lines: list[str]) -> LayoutView:
     layout = LayoutView()
     container = Container()
-
     winner = battle.instance.winner
+
     container.add_item(
         TextDisplay(
             truncate_text(
                 f"# 🏁 Match complete\n"
-                f"{battle.author.mention} vs {battle.opponent.mention} — **{winner or 'Nobody'} wins!**\n"
-                f"**Turns:** {battle.instance.turns}\n\n"
-                f"### {battle.author.display_name}'s lineup\n{format_lineup(battle.instance.p1_balls)}\n\n"
-                f"### {battle.opponent.display_name}'s lineup\n{format_lineup(battle.instance.p2_balls)}"
+                f"{battle.author.mention} **vs** {battle.opponent.mention}\n"
+                f"**Winner:** {winner or 'Draw — nobody wins'}\n"
+                f"**Turns played:** {battle.instance.turns}"
             )
         )
     )
 
-    commentary = "\n".join(log_lines[-12:])
+    commentary = "\n".join(log_lines[-14:])
     if commentary:
         container.add_item(Separator())
-        container.add_item(TextDisplay(truncate_text(f"### Commentary\n{commentary}")))
+        container.add_item(TextDisplay(truncate_text(f"### 🎙️ Commentary\n{commentary}")))
+
+    container.add_item(Separator())
+    container.add_item(
+        TextDisplay(
+            truncate_text(
+                f"### Final lineups\n"
+                f"**{battle.author.display_name}**\n{format_lineup(battle.instance.p1_balls)}\n\n"
+                f"**{battle.opponent.display_name}**\n{format_lineup(battle.instance.p2_balls)}"
+            )
+        )
+    )
+    container.add_item(Separator())
+    container.add_item(TextDisplay("-# Full commentary attached as `match-commentary.txt`"))
 
     layout.add_item(container)
     return layout
 
 
-def build_achievement_layout(title: str, body: str) -> LayoutView:
-    layout = LayoutView()
-    container = Container()
-    container.add_item(TextDisplay(truncate_text(f"# {title}\n{body}")))
-    layout.add_item(container)
-    return layout
+def build_achievement_layout(title: str, body: str, *, subtitle: str = "", footer: str = "") -> LayoutView:
+    return build_panel_layout(title=title, subtitle=subtitle, sections=[body] if body else None, footer=footer)
 
 
-def build_tournament_layout(title: str, sections: list[str]) -> LayoutView:
-    layout = LayoutView()
-    container = Container()
-    container.add_item(TextDisplay(truncate_text(f"# {title}")))
-    for section in sections:
-        container.add_item(Separator())
-        container.add_item(TextDisplay(truncate_text(section)))
-    layout.add_item(container)
-    return layout
+def build_tournament_layout(title: str, sections: list[str], *, subtitle: str = "") -> LayoutView:
+    return build_panel_layout(title=title, subtitle=subtitle, sections=sections)
 
 
 def match_log_file(log_lines: list[str]) -> discord.File:

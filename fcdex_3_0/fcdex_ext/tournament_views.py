@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import discord
 from discord.ui import ActionRow, Button, Container, Modal, Separator, TextDisplay, TextInput, button
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("fcdex_3_0.tournament.views")
 
-ManageMode = Literal["edit", "delete", "announce"]
+ManageMode = Literal["edit", "delete", "announce", "host"]
 
 
 async def load_manageable_tournaments() -> list[Tournament]:
@@ -30,10 +30,7 @@ async def load_manageable_tournaments() -> list[Tournament]:
 
 
 async def load_active_tournaments() -> list[Tournament]:
-    return [
-        t
-        async for t in Tournament.objects.exclude(status=TournamentStatus.COMPLETED).order_by("-created_at")[:25]
-    ]
+    return [t async for t in Tournament.objects.exclude(status=TournamentStatus.COMPLETED).order_by("-created_at")[:25]]
 
 
 def _owner_mismatch(interaction: Interaction, owner_id: int) -> bool:
@@ -44,6 +41,16 @@ async def _deny_owner(interaction: Interaction) -> None:
     await interaction.response.send_message(
         "Only the admin who opened this panel can use these controls.", ephemeral=True
     )
+
+
+def _require_manage_guild(interaction: Interaction) -> bool:
+    if not isinstance(interaction.user, discord.Member):
+        return False
+    return bool(interaction.user.guild_permissions.manage_guild)
+
+
+async def _deny_manage_guild(interaction: Interaction) -> None:
+    await interaction.response.send_message("You need **Manage Server** to run host actions.", ephemeral=True)
 
 
 class TournamentManageView(LayoutView):
@@ -58,11 +65,12 @@ class TournamentManageView(LayoutView):
         container = Container()
         body = (
             "# 🏟️ Tournament admin panel\n"
-            "Ephemeral — only you can see this menu.\n\n"
-            "**Create** — new tournament with full settings\n"
-            "**Edit** — change description, schedule, cutoff, status\n"
-            "**Delete** — permanently remove a tournament\n"
-            "**Announce** — post a public signup message to this channel"
+            "-# Private · only you can see this\n\n"
+            "▸ **Create** — full tournament setup\n"
+            "▸ **Edit** — description, schedule, cutoff, status\n"
+            "▸ **Host** — start group stage or advance rounds\n"
+            "▸ **Delete** — permanently remove a tournament\n"
+            "▸ **Announce** — public signup post in this channel"
         )
         if self.notice:
             body = f"{self.notice}\n\n{body}"
@@ -99,7 +107,19 @@ class TournamentManageControls(ActionRow):
         if not tournaments:
             await interaction.response.send_message("No tournaments exist yet.", ephemeral=True)
             return
-        view = TournamentPickView(self.owner_id, "edit", tournaments)
+        view = TournamentPickView(self.owner_id, cast(ManageMode, "edit"), tournaments)
+        await interaction.response.edit_message(view=view)
+
+    @button(label="Host", style=discord.ButtonStyle.primary, emoji="🎮")
+    async def host_button(self, interaction: Interaction, button: Button):
+        if _owner_mismatch(interaction, self.owner_id):
+            await _deny_owner(interaction)
+            return
+        tournaments = await load_active_tournaments()
+        if not tournaments:
+            await interaction.response.send_message("No active tournaments to host.", ephemeral=True)
+            return
+        view = TournamentPickView(self.owner_id, cast(ManageMode, "host"), tournaments)
         await interaction.response.edit_message(view=view)
 
     @button(label="Delete", style=discord.ButtonStyle.danger, emoji="🗑️")
@@ -111,7 +131,7 @@ class TournamentManageControls(ActionRow):
         if not tournaments:
             await interaction.response.send_message("No tournaments exist yet.", ephemeral=True)
             return
-        view = TournamentPickView(self.owner_id, "delete", tournaments)
+        view = TournamentPickView(self.owner_id, cast(ManageMode, "delete"), tournaments)
         await interaction.response.edit_message(view=view)
 
     @button(label="Announce", style=discord.ButtonStyle.secondary, emoji="📢")
@@ -123,7 +143,7 @@ class TournamentManageControls(ActionRow):
         if not tournaments:
             await interaction.response.send_message("No active tournaments to announce.", ephemeral=True)
             return
-        view = TournamentPickView(self.owner_id, "announce", tournaments)
+        view = TournamentPickView(self.owner_id, cast(ManageMode, "announce"), tournaments)
         await interaction.response.edit_message(view=view)
 
 
@@ -131,15 +151,20 @@ class TournamentPickView(LayoutView):
     def __init__(self, owner_id: int, mode: ManageMode, tournaments: list[Tournament]):
         super().__init__(timeout=600)
         self.owner_id = owner_id
-        self.mode = mode
+        self.mode: ManageMode = mode
         self.tournaments = tournaments
         self._build()
 
     def _build(self) -> None:
         self.clear_items()
         container = Container()
-        titles = {"edit": "Edit tournament", "delete": "Delete tournament", "announce": "Post announcement"}
-        container.add_item(TextDisplay(f"# {titles[self.mode]}\nSelect a tournament below."))
+        titles = {
+            "edit": "✏️ Edit tournament",
+            "delete": "🗑️ Delete tournament",
+            "announce": "📢 Post announcement",
+            "host": "🎮 Host controls",
+        }
+        container.add_item(TextDisplay(f"# {titles[self.mode]}\n-# Select a tournament below"))
         container.add_item(Separator())
         container.add_item(TournamentSelectRow(self.owner_id, self.mode, self.tournaments))
         container.add_item(TournamentBackRow(self.owner_id))
@@ -156,22 +181,13 @@ class TournamentSelectRow(ActionRow):
     def __init__(self, owner_id: int, mode: ManageMode, tournaments: list[Tournament]):
         super().__init__()
         self.owner_id = owner_id
-        self.mode = mode
+        self.mode: ManageMode = mode
         options = [
-            discord.SelectOption(
-                label=t.name[:100],
-                value=str(t.pk),
-                description=f"{t.get_status_display()}"[:100],
-            )
+            discord.SelectOption(label=t.name[:100], value=str(t.pk), description=f"{t.get_status_display()}"[:100])
             for t in tournaments[:25]
         ]
         self.add_item(
-            TournamentSelect(
-                owner_id=owner_id,
-                mode=mode,
-                options=options,
-                placeholder="Choose a tournament…",
-            )
+            TournamentSelect(owner_id=owner_id, mode=mode, options=options, placeholder="Choose a tournament…")
         )
 
 
@@ -179,7 +195,7 @@ class TournamentSelect(discord.ui.Select):
     def __init__(self, *, owner_id: int, mode: ManageMode, options: list[discord.SelectOption], placeholder: str):
         super().__init__(placeholder=placeholder, options=options, min_values=1, max_values=1)
         self.owner_id = owner_id
-        self.mode = mode
+        self.mode: ManageMode = mode
 
     async def callback(self, interaction: Interaction) -> None:
         if _owner_mismatch(interaction, self.owner_id):
@@ -194,6 +210,11 @@ class TournamentSelect(discord.ui.Select):
 
         if self.mode == "delete":
             view = TournamentDeleteConfirmView(self.owner_id, tournament.pk, tournament.name)
+            await interaction.response.edit_message(view=view)
+            return
+
+        if self.mode == "host":
+            view = TournamentHostView(self.owner_id, tournament.pk, tournament.name, tournament.status)
             await interaction.response.edit_message(view=view)
             return
 
@@ -281,16 +302,10 @@ class TournamentCreateModal(Modal, title="Create tournament"):
     description = TextInput(label="Description", style=discord.TextStyle.paragraph, required=False, max_length=2000)
     semifinal_cutoff = TextInput(label="Semifinal cutoff (points)", default="0", required=False, max_length=4)
     starts_at = TextInput(
-        label="Scheduled start",
-        required=False,
-        placeholder="YYYY-MM-DD or YYYY-MM-DD HH:MM",
-        max_length=32,
+        label="Scheduled start", required=False, placeholder="YYYY-MM-DD or YYYY-MM-DD HH:MM", max_length=32
     )
     ends_at = TextInput(
-        label="Scheduled end",
-        required=False,
-        placeholder="YYYY-MM-DD or YYYY-MM-DD HH:MM",
-        max_length=32,
+        label="Scheduled end", required=False, placeholder="YYYY-MM-DD or YYYY-MM-DD HH:MM", max_length=32
     )
 
     def __init__(self, owner_id: int):
@@ -335,8 +350,7 @@ class TournamentCreateModal(Modal, title="Create tournament"):
         )
 
         view = TournamentManageView(
-            self.owner_id,
-            notice=f"✅ Created **{tournament.name}**. Use **Announce** to post a public signup message.",
+            self.owner_id, notice=f"✅ Created **{tournament.name}**. Use **Announce** to post a public signup message."
         )
         await interaction.response.edit_message(view=view)
 
@@ -355,10 +369,7 @@ class TournamentEditModal(Modal, title="Edit tournament"):
             default=tournament.description[:2000] if tournament.description else None,
         )
         self.semifinal_cutoff = TextInput(
-            label="Semifinal cutoff (points)",
-            required=False,
-            max_length=4,
-            default=str(tournament.semifinal_cutoff),
+            label="Semifinal cutoff (points)", required=False, max_length=4, default=str(tournament.semifinal_cutoff)
         )
         self.starts_at = TextInput(
             label="Scheduled start",
@@ -437,7 +448,86 @@ async def post_tournament_announcement(interaction: Interaction, tournament: Tou
         f"**Semifinal cutoff:** {tournament.semifinal_cutoff} points\n"
         + ("\n".join(schedule_lines) + "\n" if schedule_lines else "")
         + f"\n{tournament.description or 'No description provided.'}\n\n"
-        f"-# Join with `/tournament join` · Legacy or Main group"
+        f"-# Join with `/tournament view` · Legacy or Main group"
     ]
     layout = build_tournament_layout(f"🏟️ {tournament.name}", sections)
     await channel.send(view=layout)  # pyright: ignore[reportArgumentType]
+
+
+class TournamentHostView(LayoutView):
+    def __init__(self, owner_id: int, tournament_id: int, tournament_name: str, status: str):
+        super().__init__(timeout=600)
+        self.owner_id = owner_id
+        self.tournament_id = tournament_id
+        self.tournament_name = tournament_name
+        self.status = status
+        self._build()
+
+    def _build(self) -> None:
+        self.clear_items()
+        container = Container()
+        container.add_item(
+            TextDisplay(
+                truncate_text(
+                    f"# 🎮 Host · **{self.tournament_name}**\n"
+                    f"-# Status: `{self.status}`\n\n"
+                    "▸ **Start** — open group stage (registration must be active)\n"
+                    "▸ **Advance** — move to semifinals, finals, or complete"
+                )
+            )
+        )
+        container.add_item(Separator())
+        container.add_item(TournamentHostControls(self.owner_id, self.tournament_id))
+        container.add_item(TournamentBackRow(self.owner_id))
+        self.add_item(container)
+
+    async def interaction_check(self, interaction: Interaction) -> bool:
+        if _owner_mismatch(interaction, self.owner_id):
+            await _deny_owner(interaction)
+            return False
+        return True
+
+
+class TournamentHostControls(ActionRow):
+    def __init__(self, owner_id: int, tournament_id: int):
+        super().__init__()
+        self.owner_id = owner_id
+        self.tournament_id = tournament_id
+
+    @button(label="Start group stage", style=discord.ButtonStyle.success, emoji="▶")
+    async def start_button(self, interaction: Interaction, button: Button):
+        if _owner_mismatch(interaction, self.owner_id):
+            await _deny_owner(interaction)
+            return
+        if not _require_manage_guild(interaction):
+            await _deny_manage_guild(interaction)
+            return
+        from fcdex_3_0.fcdex_ext.tournament_cog import run_tournament_start
+
+        tournament = await Tournament.objects.aget(pk=self.tournament_id)
+        if error := await run_tournament_start(tournament):
+            await interaction.response.send_message(error, ephemeral=True)
+            return
+        count = await tournament.registrations.acount()
+        view = TournamentManageView(
+            self.owner_id, notice=f"▶ **{tournament.name}** group stage started with **{count}** players!"
+        )
+        await interaction.response.edit_message(view=view)
+
+    @button(label="Advance round", style=discord.ButtonStyle.primary, emoji="⏭")
+    async def advance_button(self, interaction: Interaction, button: Button):
+        if _owner_mismatch(interaction, self.owner_id):
+            await _deny_owner(interaction)
+            return
+        if not _require_manage_guild(interaction):
+            await _deny_manage_guild(interaction)
+            return
+        from fcdex_3_0.fcdex_ext.tournament_cog import run_tournament_advance
+
+        tournament = await Tournament.objects.aget(pk=self.tournament_id)
+        ok, message = await run_tournament_advance(tournament)
+        if not ok:
+            await interaction.response.send_message(message, ephemeral=True)
+            return
+        view = TournamentManageView(self.owner_id, notice=message)
+        await interaction.response.edit_message(view=view)
