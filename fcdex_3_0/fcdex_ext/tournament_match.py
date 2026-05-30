@@ -60,6 +60,7 @@ async def claim_match_victory(
             registration.semifinal_eligible = False
         await registration.asave(update_fields=("score", "semifinal_eligible"))
     except TournamentRegistration.DoesNotExist:
+        # Verified winner without a registration row — record match only, no bracket points.
         pass
 
     bet_lines = await resolve_bets_for_match(match, winner)

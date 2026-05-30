@@ -82,26 +82,28 @@ def is_past_scheduled_end(tournament: Tournament) -> bool:
 
 
 def registration_is_open(tournament: Tournament) -> bool:
+    """Open while status is registration and before scheduled end — not closed by scheduled start."""
     if tournament.status != TournamentStatus.REGISTRATION:
         return False
     if is_past_scheduled_end(tournament):
-        return False
-    if tournament.scheduled_start_at and timezone.now() >= tournament.scheduled_start_at:
         return False
     return True
 
 
 def registration_closed_reason(tournament: Tournament) -> str | None:
     if tournament.status != TournamentStatus.REGISTRATION:
-        return "Registration is closed for this tournament."
+        return "Registration is closed — the host has started the tournament."
     if is_past_scheduled_end(tournament):
         return "This tournament has passed its scheduled end date."
-    if tournament.scheduled_start_at and timezone.now() >= tournament.scheduled_start_at:
-        return (
-            f"Registration closed — the scheduled start ({format_datetime(tournament.scheduled_start_at)}) has passed. "
-            f"Use `/tournament start` if you are the host."
-        )
     return None
+
+
+def registration_status_label(tournament: Tournament) -> str:
+    if not registration_is_open(tournament):
+        return registration_closed_reason(tournament) or "🔴 Registration closed"
+    if tournament.scheduled_start_at and timezone.now() >= tournament.scheduled_start_at:
+        return "🟢 Registration open · scheduled start passed — host can **Start group stage** in `/tournament manage`"
+    return "🟢 Registration open"
 
 
 def past_end_reason(tournament: Tournament) -> str | None:

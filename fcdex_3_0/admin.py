@@ -16,6 +16,7 @@ from .models import (
 @admin.register(PlayerStats)
 class PlayerStatsAdmin(admin.ModelAdmin):
     autocomplete_fields = ("player",)
+    search_fields = ("player__discord_id",)
     list_display = ("player", "battles_won", "battles_played", "merges_completed", "tournament_wins")
 
 
@@ -30,6 +31,7 @@ class AchievementAdmin(admin.ModelAdmin):
 @admin.register(PlayerAchievement)
 class PlayerAchievementAdmin(admin.ModelAdmin):
     autocomplete_fields = ("player", "achievement")
+    search_fields = ("player__discord_id", "achievement__name")
     list_display = ("player", "achievement", "progress", "unlocked_at", "claimed_at")
     list_filter = ("achievement",)
 
@@ -50,7 +52,7 @@ class TournamentAdmin(admin.ModelAdmin):
     )
     list_filter = ("status", "betting_enabled")
     search_fields = ("name", "description", "rules")
-    readonly_fields = ("created_at",)
+    readonly_fields = ("created_at", "started_at", "ended_at")
     fieldsets = (
         (None, {"fields": ("name", "description", "rules", "host", "status", "semifinal_cutoff", "match_win_reward")}),
         ("Betting", {"fields": ("betting_enabled", "min_bet", "max_bet", "bet_payout_multiplier")}),
@@ -59,8 +61,9 @@ class TournamentAdmin(admin.ModelAdmin):
             {
                 "fields": ("scheduled_start_at", "scheduled_end_at", "started_at", "ended_at", "created_at"),
                 "description": (
-                    "Scheduled dates control registration and activity windows. "
-                    "Started/ended are set automatically when hosts run /tournament start and /tournament advance."
+                    "Scheduled start blocks early host starts; registration stays open until the host starts "
+                    "group stage or scheduled end passes. Started/ended timestamps are set from "
+                    "/tournament manage → Host."
                 ),
             },
         ),
@@ -112,4 +115,6 @@ class TournamentBetAdmin(admin.ModelAdmin):
 @admin.register(MergeLog)
 class MergeLogAdmin(admin.ModelAdmin):
     autocomplete_fields = ("player", "source_ball1", "source_ball2", "result_ball")
+    search_fields = ("player__discord_id",)
     list_display = ("player", "result_ball", "created_at")
+    readonly_fields = ("created_at",)

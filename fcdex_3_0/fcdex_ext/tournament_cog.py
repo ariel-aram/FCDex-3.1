@@ -13,7 +13,6 @@ from ballsdex.core.utils.transformers import TTLModelTransformer
 from bd_models.models import Player
 from fcdex_3_0.fcdex_ext.services import increment_stat
 from fcdex_3_0.fcdex_ext.tournament_bets import place_bet
-from fcdex_3_0.fcdex_ext.tournament_bounty_views import build_bounty_pick_view
 from fcdex_3_0.fcdex_ext.tournament_bracket import create_semifinal_pairings, sync_bracket_for_status
 from fcdex_3_0.fcdex_ext.tournament_match_views import build_tournament_match_menu
 from fcdex_3_0.fcdex_ext.tournament_player_views import build_tournament_player_menu
@@ -56,16 +55,12 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
     def __init__(self, bot: BallsDexBot):
         self.bot = bot
 
-    @app_commands.command(name="manage", description="Admin panel — create, edit, delete, and run tournaments")
+    @app_commands.command(
+        name="manage", description="Admin panel — create, edit, host, bounty vault, delete, and announce tournaments"
+    )
     @app_commands.checks.has_permissions(manage_guild=True)
     async def manage(self, interaction: discord.Interaction):
         view = TournamentManageView(interaction.user.id)
-        await interaction.response.send_message(view=view, ephemeral=True)  # pyright: ignore[reportArgumentType]
-
-    @app_commands.command(name="bounty", description="Admin bounty vault — loot pools, rules, and betting setup")
-    @app_commands.checks.has_permissions(manage_guild=True)
-    async def bounty(self, interaction: discord.Interaction):
-        view = await build_bounty_pick_view(interaction.user.id)
         await interaction.response.send_message(view=view, ephemeral=True)  # pyright: ignore[reportArgumentType]
 
     @app_commands.command(name="view", description="Tournament hub — overview, standings, bracket, and join")
@@ -94,9 +89,10 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
             if tournament.betting_enabled
             else "🎲 Betting **off** for this event"
         )
+        no_rules = "*No rules posted yet — admins can configure them in `/tournament manage` → **Bounty vault**.*"
         sections = [
             betting,
-            tournament.rules or "*No rules posted yet — admins can configure them in `/tournament bounty`.*",
+            tournament.rules or no_rules,
             "-# `/tournament bet` to wager · `/tournament match` to claim bounties after wins",
         ]
         layout = build_tournament_layout(f"📜 {tournament.name} · Rules", sections)

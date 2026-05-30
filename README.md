@@ -21,10 +21,11 @@ Legacy & Main group tournaments with battle-verified matches, bounties, betting,
 
 Points are earned only from verified match wins (**+3** each). Hosts advance rounds once all bracket matches are complete.
 
+Registration stays open until the host **starts group stage** in `/tournament manage` (or scheduled end passes) — a passed scheduled start does not close signup.
+
 | Command | Description |
 | ------- | ----------- |
-| `/tournament manage` | Ephemeral admin hub — create, edit, host, delete, announce |
-| `/tournament bounty` | Ephemeral admin vault — drop/stash loot, rules, betting |
+| `/tournament manage` | Ephemeral admin hub — create, edit, host, bounty vault, delete, announce |
 | `/tournament view` | Player hub — overview, standings, bracket, join |
 | `/tournament match` | Pending matches — **Start battle**, verify win, claim bounties |
 | `/tournament bet` | Wager coins on a match participant |
@@ -58,7 +59,7 @@ Add to `config/extra.toml` in your BallsDex directory:
 
 ```toml
 [[ballsdex.packages]]
-location = "git+https://github.com/ariel-aram/FCDex-3.0.git@1.5.2"
+location = "git+https://github.com/ariel-aram/FCDex-3.0.git@1.5.3"
 path = "fcdex_3_0"
 enabled = true
 ```
@@ -82,6 +83,8 @@ docker compose up -d
 
 Migrations run automatically via the migration service.
 
+Apply through **`0006`** if upgrading from an earlier 1.5.x install (schedule help-text sync only; no data changes).
+
 ### 3 — Configure achievements (optional)
 
 Open the admin panel and create `Achievement` entries under **FCDex 3.0**. Set type, required count, and rewards.
@@ -90,6 +93,16 @@ Open the admin panel and create `Achievement` entries under **FCDex 3.0**. Set t
 
 - BallsDex **V3** (3.0.0+) — must already be installed; this extra does not pull `ballsdex` from PyPI
 - Python **3.12+**
+
+## Development
+
+```bash
+python -m pip install -e ".[dev]"
+python -m ruff check fcdex_3_0 tests
+python -m ruff format fcdex_3_0 tests
+python -m pytest tests -q
+python -m pyright fcdex_3_0
+```
 
 ## License
 

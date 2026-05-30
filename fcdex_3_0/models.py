@@ -109,16 +109,21 @@ class Tournament(models.Model):
     scheduled_start_at = models.DateTimeField(
         null=True,
         blank=True,
-        help_text="Planned start — registration closes after this time until /tournament start is run.",
+        help_text=(
+            "Planned start — blocks the host from starting group stage early. "
+            "Player registration stays open until the host starts or scheduled end passes."
+        ),
     )
     scheduled_end_at = models.DateTimeField(
-        null=True, blank=True, help_text="Planned end — no new joins or score updates after this time."
+        null=True, blank=True, help_text="Planned end — registration and new match activity close after this time."
     )
     started_at = models.DateTimeField(
-        null=True, blank=True, help_text="Actual time the group stage was started via /tournament start."
+        null=True, blank=True, help_text="Actual time the group stage was started via /tournament manage → Host."
     )
     ended_at = models.DateTimeField(
-        null=True, blank=True, help_text="Actual time the tournament was completed via /tournament advance."
+        null=True,
+        blank=True,
+        help_text="Actual time the tournament was completed via /tournament manage → Host → Advance round.",
     )
 
     class Meta:

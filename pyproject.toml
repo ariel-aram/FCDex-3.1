@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fcdex-3-0"
-version = "1.5.2"
+version = "1.5.3"
 description = "FCDex 3.0 — tournaments, battles, achievements, and merging for BallsDex V3"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -31,7 +31,12 @@ dev = [
   "pyright>=1.1.406",
   "django>=6.0",
   "django-types",
+  "pytest>=8.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 120
@@ -61,6 +66,7 @@ reportIncompatibleVariableOverride = "warning"
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "basic"
+exclude = ["tests"]
 
 [[tool.pyright.executionEnvironments]]
 root = "fcdex_3_0/fcdex_ext"

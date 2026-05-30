@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("fcdex_3_0.tournament.bounty")
 
-BountyBackTarget = Literal["manage", "hub", "pick"]
+BountyBackTarget = Literal["manage", "hub"]
 
 
 async def format_bounty_pool(tournament_id: int) -> str:
@@ -84,10 +84,9 @@ async def create_round_bounty(
 
 
 class TournamentBountyPickView(LayoutView):
-    def __init__(self, owner_id: int, tournaments: list[Tournament], *, back_to_manage: bool = False):
+    def __init__(self, owner_id: int, tournaments: list[Tournament]):
         super().__init__(timeout=600)
         self.owner_id = owner_id
-        self.back_to_manage = back_to_manage
         self._build(tournaments)
 
     def _build(self, tournaments: list[Tournament]) -> None:
@@ -116,12 +115,10 @@ class TournamentBountyPickView(LayoutView):
                         )
                         for t in tournaments[:25]
                     ],
-                    back_to_manage=self.back_to_manage,
                 )
             )
             container.add_item(row)
-        if self.back_to_manage:
-            container.add_item(TournamentBountyBackRow(self.owner_id, "manage"))
+        container.add_item(TournamentBountyBackRow(self.owner_id, "manage"))
         self.add_item(container)
 
     async def interaction_check(self, interaction: Interaction) -> bool:
@@ -135,22 +132,19 @@ class TournamentBountyPickView(LayoutView):
 
 
 class TournamentBountyTournamentSelect(discord.ui.Select):
-    def __init__(self, owner_id: int, options: list[discord.SelectOption], *, back_to_manage: bool = False):
+    def __init__(self, owner_id: int, options: list[discord.SelectOption]):
         super().__init__(placeholder="Choose a tournament…", options=options, min_values=1, max_values=1)
         self.owner_id = owner_id
-        self.back_to_manage = back_to_manage
 
     async def callback(self, interaction: Interaction) -> None:
         if _owner_mismatch(interaction, self.owner_id):
             await _deny_owner(interaction)
             return
-        view = await build_tournament_bounty_hub(self.owner_id, int(self.values[0]), back_to_manage=self.back_to_manage)
+        view = await build_tournament_bounty_hub(self.owner_id, int(self.values[0]))
         await interaction.response.edit_message(view=view)
 
 
-async def build_tournament_bounty_hub(
-    owner_id: int, tournament_id: int, *, notice: str = "", back_to_manage: bool = False
-) -> LayoutView:
+async def build_tournament_bounty_hub(owner_id: int, tournament_id: int, *, notice: str = "") -> LayoutView:
     tournament = await Tournament.objects.aget(pk=tournament_id)
     pool = await format_bounty_pool(tournament_id)
     betting = (
@@ -177,8 +171,7 @@ async def build_tournament_bounty_hub(
     )
     container.add_item(Separator())
     container.add_item(TournamentBountyActionRow(owner_id, tournament_id))
-    back_target: BountyBackTarget = "manage" if back_to_manage else "pick"
-    container.add_item(TournamentBountyBackRow(owner_id, back_target, tournament_id=tournament_id))
+    container.add_item(TournamentBountyBackRow(owner_id, "manage", tournament_id=tournament_id))
     view.add_item(container)
     return view
 
@@ -533,12 +526,9 @@ class TournamentBountyBackRow(ActionRow):
             view = await build_tournament_bounty_hub(self.owner_id, self.tournament_id)
             await interaction.response.edit_message(view=view)
             return
-        tournaments = await load_manageable_tournaments()
-        await interaction.response.edit_message(
-            view=TournamentBountyPickView(self.owner_id, tournaments, back_to_manage=False)
-        )
+        await interaction.response.edit_message(view=TournamentManageView(self.owner_id))
 
 
-async def build_bounty_pick_view(owner_id: int, *, back_to_manage: bool = False) -> LayoutView:
+async def build_bounty_pick_view(owner_id: int) -> LayoutView:
     tournaments = await load_manageable_tournaments()
-    return TournamentBountyPickView(owner_id, tournaments, back_to_manage=back_to_manage)
+    return TournamentBountyPickView(owner_id, tournaments)

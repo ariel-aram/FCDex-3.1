@@ -69,7 +69,7 @@ class TournamentManageView(LayoutView):
             "▸ **Create** — full tournament setup\n"
             "▸ **Edit** — description, schedule, cutoff, status\n"
             "▸ **Host** — start group stage or advance rounds\n"
-            "▸ **Bounty** — loot pools, rules, and betting (`/tournament bounty`)\n"
+            "▸ **Bounty vault** — loot pools, rules, and betting\n"
             "▸ **Delete** — permanently remove a tournament\n"
             "▸ **Announce** — public signup post in this channel"
         )
@@ -164,7 +164,7 @@ class TournamentManageExtraRow(ActionRow):
             return
         from fcdex_3_0.fcdex_ext.tournament_bounty_views import build_bounty_pick_view
 
-        view = await build_bounty_pick_view(self.owner_id, back_to_manage=True)
+        view = await build_bounty_pick_view(self.owner_id)
         await interaction.response.edit_message(view=view)
 
 

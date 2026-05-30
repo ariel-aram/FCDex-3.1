@@ -13,6 +13,7 @@ from fcdex_3_0.fcdex_ext.tournament_match_views import build_bracket_sections
 from fcdex_3_0.fcdex_ext.tournament_schedule import (
     registration_closed_reason,
     registration_is_open,
+    registration_status_label,
     schedule_summary_lines,
 )
 from fcdex_3_0.fcdex_ext.views import truncate_text
@@ -29,11 +30,7 @@ async def build_overview_sections(tournament: Tournament, viewer_id: int | None 
     legacy_count = await tournament.registrations.filter(group=TournamentGroup.LEGACY).acount()
     main_count = await tournament.registrations.filter(group=TournamentGroup.MAIN).acount()
     schedule_lines = schedule_summary_lines(tournament)
-    registration_note = (
-        "🟢 Registration open"
-        if registration_is_open(tournament)
-        else (registration_closed_reason(tournament) or "🔴 Registration closed")
-    )
+    registration_note = registration_status_label(tournament)
 
     your_group = ""
     if viewer_id:
@@ -41,7 +38,11 @@ async def build_overview_sections(tournament: Tournament, viewer_id: int | None 
             reg = await tournament.registrations.select_related("player").aget(player__discord_id=viewer_id)
             your_group = f"\n**Your group** · **{reg.get_group_display()}** · `{reg.score}` pts"
         except TournamentRegistration.DoesNotExist:
-            your_group = "\n**Your group** · *Not registered — join from this hub*"
+            if registration_is_open(tournament):
+                your_group = "\n**Your group** · *Not registered — pick **Legacy** or **Main** below*"
+            else:
+                closed = registration_closed_reason(tournament) or "Registration is closed."
+                your_group = f"\n**Your group** · *Not registered · {closed}*"
 
     rules_text = (
         (tournament.rules[:500] + "…")
@@ -159,6 +160,12 @@ class TournamentPlayerTabControls(ActionRow):
         await interaction.response.edit_message(view=layout)
 
 
+async def viewer_can_join(tournament: Tournament, viewer_id: int) -> bool:
+    if not registration_is_open(tournament):
+        return False
+    return not await tournament.registrations.filter(player__discord_id=viewer_id).aexists()
+
+
 async def build_tournament_player_menu(
     owner_id: int, tournament_id: int, *, mode: str = "overview", notice: str = ""
 ) -> LayoutView:
@@ -183,9 +190,9 @@ async def build_tournament_player_menu(
         container.add_item(Separator())
         container.add_item(TextDisplay(truncate_text(section)))
 
-    if mode == "overview" and registration_is_open(tournament):
+    if mode == "overview" and await viewer_can_join(tournament, owner_id):
         container.add_item(Separator())
-        container.add_item(TextDisplay("### Join this tournament"))
+        container.add_item(TextDisplay("### Join this tournament\nPick **Legacy** or **Main** below."))
         container.add_item(TournamentJoinRow(owner_id, tournament_id))
 
     container.add_item(Separator())
