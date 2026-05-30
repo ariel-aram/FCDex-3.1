@@ -8,6 +8,7 @@ from discord.ui import ActionRow, Button, Container, Separator, TextDisplay, but
 
 from ballsdex.core.discord import LayoutView
 from bd_models.models import Player
+from fcdex_3_0.fcdex_ext.tournament_bracket import explain_no_matches
 from fcdex_3_0.fcdex_ext.tournament_loot import load_match_prizes
 from fcdex_3_0.fcdex_ext.tournament_match import claim_match_victory, list_pending_matches
 from fcdex_3_0.fcdex_ext.views import truncate_text
@@ -123,11 +124,7 @@ async def build_bracket_sections(tournament: Tournament) -> list[str]:
 async def build_match_hub_body(tournament: Tournament, player: Player) -> tuple[str, list[TournamentMatch]]:
     pending = await list_pending_matches(tournament, player)
     if not pending:
-        return (
-            f"No pending matches in **{tournament.name}**.\n"
-            "-# Register via `/tournament view`, then wait for the host to start the group stage.",
-            [],
-        )
+        return await explain_no_matches(tournament, player), []
 
     lines: list[str] = []
     for match in pending:
@@ -192,10 +189,7 @@ class TournamentMatchBattleRow(ActionRow):
 
         match = await TournamentMatch.objects.select_related("player1", "player2").aget(pk=self.menu.selected_match_id)
         ok, result = await start_tournament_match_battle(
-            interaction,
-            cast(BallsDexBot, interaction.client),
-            match,
-            interaction.user,
+            interaction, cast(BallsDexBot, interaction.client), match, interaction.user
         )
         if not ok:
             await interaction.response.send_message(str(result), ephemeral=True)

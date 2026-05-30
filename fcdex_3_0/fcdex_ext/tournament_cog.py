@@ -14,6 +14,7 @@ from bd_models.models import Player
 from fcdex_3_0.fcdex_ext.services import increment_stat
 from fcdex_3_0.fcdex_ext.tournament_bets import place_bet
 from fcdex_3_0.fcdex_ext.tournament_bounty_views import build_bounty_pick_view
+from fcdex_3_0.fcdex_ext.tournament_bracket import create_semifinal_pairings, sync_bracket_for_status
 from fcdex_3_0.fcdex_ext.tournament_match_views import build_tournament_match_menu
 from fcdex_3_0.fcdex_ext.tournament_player_views import build_tournament_player_menu
 from fcdex_3_0.fcdex_ext.tournament_schedule import past_end_reason, start_blocked_reason
@@ -182,19 +183,26 @@ async def run_tournament_advance(tournament: Tournament) -> tuple[bool, str]:
 
             finalists = [r for r in regs if not r.eliminated][:2]
             if len(finalists) == 2:
-                await TournamentMatch.objects.acreate(
-                    tournament=tournament,
-                    round=TournamentRound.SEMIFINAL,
-                    group=group.value,
-                    player1=finalists[0].player,
-                    player2=finalists[1].player,
-                )
+                if not await tournament.matches.filter(round=TournamentRound.SEMIFINAL, group=group.value).aexists():
+                    await TournamentMatch.objects.acreate(
+                        tournament=tournament,
+                        round=TournamentRound.SEMIFINAL,
+                        group=group.value,
+                        player1=finalists[0].player,
+                        player2=finalists[1].player,
+                    )
 
         tournament.status = TournamentStatus.SEMIFINALS
         await tournament.asave(update_fields=("status",))
-        return True, f"Semifinals started! **{eliminated}** players eliminated for low scores."
+        semis_created = await create_semifinal_pairings(tournament)
+        extra = f" · **{semis_created}** semifinal pairing(s) created" if semis_created else ""
+        return True, f"Semifinals started! **{eliminated}** players eliminated.{extra}"
 
     if tournament.status == TournamentStatus.SEMIFINALS:
+        semis, _ = await sync_bracket_for_status(tournament)
+        if semis:
+            return True, f"Created **{semis}** missing semifinal pairing(s). Players can use `/tournament match` now."
+
         pending = await tournament.matches.filter(round=TournamentRound.SEMIFINAL, completed=False).acount()
         if pending:
             return False, (
@@ -223,6 +231,10 @@ async def run_tournament_advance(tournament: Tournament) -> tuple[bool, str]:
         return True, "Grand final match created! Both finalists must battle via `/tournament match`."
 
     if tournament.status == TournamentStatus.FINALS:
+        _, final_created = await sync_bracket_for_status(tournament)
+        if final_created:
+            return True, "Grand final match created! Finalists use `/tournament match` → **Start battle**."
+
         final = (
             await tournament.matches.filter(round=TournamentRound.FINAL)
             .select_related("player1", "player2", "winner")

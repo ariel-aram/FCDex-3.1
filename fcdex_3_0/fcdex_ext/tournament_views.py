@@ -494,7 +494,8 @@ class TournamentHostView(LayoutView):
                     f"# 🎮 Host · **{self.tournament_name}**\n"
                     f"-# Status: `{self.status}`\n\n"
                     "▸ **Start** — open group stage (registration must be active)\n"
-                    "▸ **Advance** — move to semifinals, finals, or complete"
+                    "▸ **Advance** — move to semifinals, finals, or complete\n"
+                    "▸ **Sync bracket** — repair missing semifinal/final pairings"
                 )
             )
         )
@@ -552,4 +553,29 @@ class TournamentHostControls(ActionRow):
             await interaction.response.send_message(message, ephemeral=True)
             return
         view = TournamentManageView(self.owner_id, notice=message)
+        await interaction.response.edit_message(view=view)
+
+    @button(label="Sync bracket", style=discord.ButtonStyle.secondary, emoji="🔄")
+    async def sync_button(self, interaction: Interaction, button: Button):
+        if _owner_mismatch(interaction, self.owner_id):
+            await _deny_owner(interaction)
+            return
+        if not _require_manage_guild(interaction):
+            await _deny_manage_guild(interaction)
+            return
+        from fcdex_3_0.fcdex_ext.tournament_bracket import sync_bracket_for_status
+
+        tournament = await Tournament.objects.aget(pk=self.tournament_id)
+        semis, final = await sync_bracket_for_status(tournament)
+        if not semis and not final:
+            await interaction.response.send_message("Bracket is already synced — no missing pairings.", ephemeral=True)
+            return
+        parts: list[str] = []
+        if semis:
+            parts.append(f"**{semis}** semifinal pairing(s)")
+        if final:
+            parts.append("**grand final**")
+        view = TournamentManageView(
+            self.owner_id, notice=f"🔄 Created {' and '.join(parts)}. Semifinalists use `/tournament match`."
+        )
         await interaction.response.edit_message(view=view)
