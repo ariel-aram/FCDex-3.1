@@ -50,9 +50,7 @@ Sacrifice two clubballs to craft a new card with the **FCDex Merge** special (cu
 | Command | Description |
 | ------- | ----------- |
 | `/fcdex menu` | Directory of all FCDex 3.0 features |
-| `/merge menu` | Step-by-step merge forge (Components v2) |
-| `/merge clubs` | Quick merge with two chosen cards |
-| `/merge info` | How merge specials work |
+| `/merge` | Pick two clubballs → confirm → **FCDex Merge** special card |
 
 On install, the extra **creates or repairs** the merge special in your database and reloads the BallsDex cache automatically.
 
@@ -66,7 +64,7 @@ Add to `config/extra.toml` in your BallsDex directory:
 
 ```toml
 [[ballsdex.packages]]
-location = "git+https://github.com/ariel-aram/FCDex-3.0.git@1.6.1"
+location = "git+https://github.com/ariel-aram/FCDex-3.0.git@1.6.2"
 path = "fcdex_3_0"
 enabled = true
 ```
