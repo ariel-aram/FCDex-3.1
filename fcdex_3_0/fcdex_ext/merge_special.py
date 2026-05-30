@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from asgiref.sync import sync_to_async
 from django.core.files.base import ContentFile
 from django.utils import timezone
 
@@ -19,8 +20,16 @@ MERGE_SPECIAL_EMOJI = "✨"
 MERGE_SPECIAL_CATCH = "Forged in the FCDex merge — two clubballs became one masterpiece."
 
 
-async def _save_background(special: Special, payload: bytes) -> None:
+def _save_background_sync(special: Special, payload: bytes) -> None:
     special.background.save(MERGE_BACKGROUND_FILENAME, ContentFile(payload), save=True)
+
+
+def _has_background_file(special: Special) -> bool:
+    return bool(special.background and special.background.name)
+
+
+async def _save_background(special: Special, payload: bytes) -> None:
+    await sync_to_async(_save_background_sync)(special, payload)
 
 
 async def ensure_merge_special() -> Special:
@@ -39,9 +48,11 @@ async def ensure_merge_special() -> Special:
             start_date=timezone.now(),
         )
         await _save_background(special, payload)
+        special = await Special.objects.aget(pk=special.pk)
         log.info("Created merge special %s (pk=%s).", MERGE_SPECIAL_NAME, special.pk)
-    elif not special.background:
+    elif not await sync_to_async(_has_background_file)(special):
         await _save_background(special, payload)
+        special = await Special.objects.aget(pk=special.pk)
         log.info("Repaired missing background for merge special pk=%s.", special.pk)
 
     specials[special.pk] = special
