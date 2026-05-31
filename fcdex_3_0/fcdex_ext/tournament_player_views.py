@@ -30,18 +30,18 @@ async def build_overview_sections(tournament: Tournament, viewer_id: int | None 
     legacy_count = await TournamentRegistration.objects.filter(
         tournament=tournament, group=TournamentGroup.LEGACY
     ).acount()
-    main_count = await TournamentRegistration.objects.filter(
-        tournament=tournament, group=TournamentGroup.MAIN
-    ).acount()
+    main_count = await TournamentRegistration.objects.filter(tournament=tournament, group=TournamentGroup.MAIN).acount()
     schedule_lines = schedule_summary_lines(tournament)
     registration_note = registration_status_label(tournament)
 
     your_group = ""
     if viewer_id:
         try:
-            reg = await TournamentRegistration.objects.filter(tournament=tournament).select_related(
-                "player"
-            ).aget(player__discord_id=viewer_id)
+            reg = (
+                await TournamentRegistration.objects.filter(tournament=tournament)
+                .select_related("player")
+                .aget(player__discord_id=viewer_id)
+            )
             your_group = f"\n**Your group** · **{reg.get_group_display()}** · `{reg.score}` pts"
         except TournamentRegistration.DoesNotExist:
             if registration_is_open(tournament):
@@ -80,9 +80,11 @@ async def build_standings_sections(tournament: Tournament) -> list[str]:
     sections: list[str] = []
     for group in TournamentGroup:
         lines: list[str] = []
-        queryset = TournamentRegistration.objects.filter(
-            tournament=tournament, group=group.value
-        ).select_related("player").order_by("-score", "player_id")
+        queryset = (
+            TournamentRegistration.objects.filter(tournament=tournament, group=group.value)
+            .select_related("player")
+            .order_by("-score", "player_id")
+        )
         rank = 1
         async for reg in queryset:
             flag = "❌" if reg.eliminated else ("⚠️" if not reg.semifinal_eligible else "✅")

@@ -458,7 +458,7 @@ class TournamentEditModal(Modal, title="Edit tournament"):
 
 async def post_tournament_announcement(interaction: Interaction, tournament: Tournament) -> None:
     channel = interaction.channel
-    if channel is None:
+    if not isinstance(channel, discord.abc.Messageable):
         raise RuntimeError("Missing channel for tournament announcement.")
 
     host_discord_id = await Player.objects.values_list("discord_id", flat=True).aget(pk=tournament.host_id)
@@ -473,7 +473,7 @@ async def post_tournament_announcement(interaction: Interaction, tournament: Tou
         f"-# `/tournament view` · `/tournament match` · `/tournament bet`"
     ]
     layout = build_tournament_layout(f"🏟️ {tournament.name}", sections)
-    await channel.send(view=layout)  # pyright: ignore[reportArgumentType]
+    await channel.send(view=layout)
 
 
 class TournamentHostView(LayoutView):

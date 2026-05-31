@@ -1,70 +1,114 @@
 from __future__ import annotations
 
+from collections import defaultdict
+
 from bd_models.models import Ball, balls
 from fcdex_3_0.fcdex_ext.rarity_data import (
     CATEGORY_LABELS,
+    RarityBallInfo,
     RarityCategory,
-    RarityEntry,
-    entries_for_category,
-    entries_for_tier,
-    obtainable_tiers,
-    resolve_entry,
+    format_rarity_value,
+    normalize_rarity_name,
 )
 
 
-def resolve_ball(ball: Ball) -> RarityEntry | None:
-    return resolve_entry(ball.country)
+async def fetch_all_balls() -> list[Ball]:
+    if balls:
+        return list(balls.values())
+    return [ball async for ball in Ball.objects.all()]
 
 
-def format_entry_line(entry: RarityEntry, *, ball: Ball | None = None) -> str:
-    category = CATEGORY_LABELS[entry.category]
-    weight = f" · `{entry.weight_display}`" if entry.weight is not None else ""
-    status = "✅ spawn" if entry.obtainable else "🚫 not spawnable"
-    dex = ""
-    if ball is not None:
-        dex = f" · dex `{ball.rarity}`" if ball.rarity else ""
-    return f"**T{entry.tier}** · {entry.name}{weight}\n-# {category} · {status}{dex}"
+def balls_for_category(all_balls: list[Ball], category: RarityCategory) -> list[RarityBallInfo]:
+    spawnable = category == RarityCategory.SPAWNABLE
+    rows = [RarityBallInfo.from_ball(ball) for ball in all_balls if ball.enabled == spawnable]
+    return sorted(rows, key=lambda entry: (entry.rarity, entry.name.casefold()))
 
 
-def build_obtainable_overview(*, tiers_per_page: int = 8) -> list[str]:
+def balls_at_rarity(all_balls: list[Ball], rarity: float, *, spawnable_only: bool = True) -> list[RarityBallInfo]:
+    target = format_rarity_value(rarity)
+    rows: list[RarityBallInfo] = []
+    for ball in all_balls:
+        if spawnable_only and not ball.enabled:
+            continue
+        if format_rarity_value(ball.rarity) != target:
+            continue
+        rows.append(RarityBallInfo.from_ball(ball))
+    return sorted(rows, key=lambda entry: entry.name.casefold())
+
+
+def distinct_rarity_values(all_balls: list[Ball], *, spawnable_only: bool = True) -> list[float]:
+    values: set[float] = set()
+    for ball in all_balls:
+        if spawnable_only and not ball.enabled:
+            continue
+        values.add(ball.rarity)
+    return sorted(values)
+
+
+def resolve_ball_by_name(all_balls: list[Ball], name: str) -> Ball | None:
+    needle = normalize_rarity_name(name)
+    if not needle:
+        return None
+    matches = [ball for ball in all_balls if normalize_rarity_name(ball.country) == needle]
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    enabled = [ball for ball in matches if ball.enabled]
+    return enabled[0] if enabled else matches[0]
+
+
+def format_ball_line(ball: Ball) -> str:
+    info = RarityBallInfo.from_ball(ball)
+    status = "✅ spawnable" if info.enabled else "🚫 not spawnable"
+    category = CATEGORY_LABELS[info.category]
+    return (
+        f"**r:{info.rarity_display}** · {info.name}\n"
+        f"-# {category} · {status} · `{info.attack}` ATK · `{info.health}` HP"
+    )
+
+
+def build_spawnable_overview(all_balls: list[Ball], *, values_per_page: int = 8) -> list[str]:
     pages: list[str] = []
-    tiers = obtainable_tiers()
-    for start in range(0, len(tiers), tiers_per_page):
-        chunk = tiers[start : start + tiers_per_page]
+    rarity_values = distinct_rarity_values(all_balls, spawnable_only=True)
+    for start in range(0, len(rarity_values), values_per_page):
+        chunk = rarity_values[start : start + values_per_page]
         sections: list[str] = []
-        for tier in chunk:
-            rows = entries_for_tier(tier)
+        for value in chunk:
+            rows = balls_at_rarity(all_balls, value, spawnable_only=True)
             names = ", ".join(row.name for row in rows)
-            sections.append(f"**T{tier}** ({len(rows)}) · {names}")
-        pages.append("### ⚽ Official obtainable list\n" + "\n\n".join(sections))
-    return pages or ["### ⚽ Official obtainable list\n*No entries configured.*"]
+            display = format_rarity_value(value)
+            sections.append(f"**r:{display}** ({len(rows)}) · {names}")
+        pages.append("### ✅ Spawnable clubballs\n" + "\n\n".join(sections))
+    return pages or ["### ✅ Spawnable clubballs\n*No spawnable clubballs in the dex.*"]
 
 
-def build_category_overview(category: RarityCategory) -> str:
-    rows = sorted(entries_for_category(category), key=lambda entry: (entry.tier, entry.name))
+def build_category_overview(all_balls: list[Ball], category: RarityCategory) -> str:
+    rows = balls_for_category(all_balls, category)
     if not rows:
-        return f"### {CATEGORY_LABELS[category]}\n*No entries.*"
+        return f"### {CATEGORY_LABELS[category]}\n*No clubballs in this group.*"
     lines: list[str] = []
-    current_tier: int | None = None
+    current_rarity: str | None = None
     for row in rows:
-        if row.tier != current_tier:
-            current_tier = row.tier
-            lines.append(f"\n**Tier {current_tier}**")
-        weight = f" · `{row.weight_display}`" if row.weight is not None else ""
-        lines.append(f"• {row.name}{weight}")
+        rarity = row.rarity_display
+        if rarity != current_rarity:
+            current_rarity = rarity
+            lines.append(f"\n**r:{rarity}**")
+        lines.append(f"• {row.name} · `{row.attack}` ATK · `{row.health}` HP")
     return f"### {CATEGORY_LABELS[category]}\n" + "\n".join(lines).strip()
 
 
-def count_catalog() -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for category in RarityCategory:
-        counts[category.value] = len(entries_for_category(category))
-    return counts
+def count_catalog(all_balls: list[Ball]) -> dict[str, int]:
+    return {
+        RarityCategory.SPAWNABLE.value: len(balls_for_category(all_balls, RarityCategory.SPAWNABLE)),
+        RarityCategory.UNSPAWNABLE.value: len(balls_for_category(all_balls, RarityCategory.UNSPAWNABLE)),
+    }
 
 
-def enabled_balls_missing_from_sheet() -> list[str]:
-    missing: list[str] = []
-    for ball in balls.values():
-        if ball.enabled and resolve_ball(ball) is None:
-            missing.append(ball.country)
-    return sorted(missing)
+def rarity_distribution(all_balls: list[Ball]) -> dict[str, int]:
+    counts: dict[str, int] = defaultdict(int)
+    for ball in all_balls:
+        if not ball.enabled:
+            continue
+        counts[format_rarity_value(ball.rarity)] += 1
+    return dict(sorted(counts.items(), key=lambda item: float(item[0])))

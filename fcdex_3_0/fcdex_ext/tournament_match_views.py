@@ -74,9 +74,7 @@ async def build_seeding_sections(tournament: Tournament) -> list[str]:
     for group in TournamentGroup:
         regs = [
             r
-            async for r in TournamentRegistration.objects.filter(
-                tournament=tournament, group=group.value
-            )
+            async for r in TournamentRegistration.objects.filter(tournament=tournament, group=group.value)
             .select_related("player")
             .order_by("-score", "player_id")
         ]
@@ -123,8 +121,7 @@ async def build_bracket_sections(tournament: Tournament) -> list[str]:
         if not knockout:
             continue
         blocks = [
-            f"**{round_title}{' · `' + _group_label(m.group) + '`' if m.group else ''}**\n"
-            f"{format_match_line(m)}"
+            f"**{round_title}{' · `' + _group_label(m.group) + '`' if m.group else ''}**\n{format_match_line(m)}"
             for m in knockout
         ]
         sections.append(f"### 🗂️ {round_title}\n\n" + "\n\n".join(blocks))
@@ -272,6 +269,9 @@ async def build_tournament_match_menu(owner_id: int, tournament_id: int, *, noti
     header = "# ⚔️ Tournament matches"
     if notice:
         header += f"\n{notice}"
-    header += f"\n-# **{tournament.name}** · **Start battle** to verify wins · match **#** on Bracket tab for `/tournament bet`"
+    header += (
+        f"\n-# **{tournament.name}** · **Start battle** to verify wins · "
+        f"match **#** on Bracket tab for `/tournament bet`"
+    )
 
     return TournamentMatchMenuLayout(owner_id, tournament_id, pending=pending, header=header, body=body)

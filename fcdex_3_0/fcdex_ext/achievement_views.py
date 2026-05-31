@@ -122,9 +122,7 @@ class AchievementTabControls(ActionRow):
         await interaction.response.edit_message(view=layout)
 
 
-async def build_achievement_menu(
-    owner_id: int, *, mode: str = "catalog", extra: str = ""
-) -> LayoutView:
+async def build_achievement_menu(owner_id: int, *, mode: str = "catalog", extra: str = "") -> LayoutView:
     layout = LayoutView(timeout=300)
     container = Container()
 

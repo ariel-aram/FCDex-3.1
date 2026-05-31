@@ -32,15 +32,15 @@ Registration stays open until the host **starts group stage** in `/tournament ma
 
 ### 📊 Rarity system
 
-Official **fixed-tier** lists (not auto-calculated from spawn weights like generic dex extras). Lower tier = rarer.
+Live **BallsDex spawn weights** from the dex bot (`Ball.rarity` / balls cache). Lower value = rarer.
 
 | Command | Description |
 | ------- | ----------- |
-| `/fcdex rarity` | Hub — obtainable tiers, icons, events, unobtainable |
-| `/fcdex rarity clubball:<card>` | Look up one clubball on the official sheet |
-| `/fcdex rarity tier:<n>` | All obtainable clubballs at tier **n** |
+| `/fcdex rarity` | Hub — spawnable overview, distribution, browse tabs |
+| `/fcdex rarity clubball:<card>` | Look up one clubball's spawn weight and stats |
+| `/fcdex rarity rarity:<value>` | All spawnable clubballs at spawn weight **value** |
 
-Categories: **Obtainable**, **Icons**, **GOAT · Icon**, **Prime clubs**, **Event customs**, **Eid customs**, **Exclusive**, **Unobtainable**.
+Categories: **Spawnable** (enabled in dex) and **Unspawnable** (disabled).
 
 Use `/fcdex menu` for a single hub listing every FCDex command group.
 
@@ -68,14 +68,26 @@ Server scope ranks **clubballs caught in that Discord server** only. Global scop
 
 ### ✨ Merge forge
 
-Sacrifice two clubballs to craft a new card with the **FCDex Merge** special (custom background from the extra’s merge card art). The result inherits one of your parent club types — not a random unrelated ball.
+Sacrifice **matching clubballs** through **7 forge tiers** to craft a **FCDex Merge** special (custom background from the extra’s merge card art). Every input must be the **same clubball type** — the result keeps that club.
 
-**Limits:** **5 merges per player per calendar week** (resets Monday). Cards that already have the **FCDex Merge** special cannot be used as merge inputs.
+| Level | Inputs | Result stats |
+| ----- | ------ | ------------ |
+| **1** | 10× common (same club) | +15% ATK / +15% HP |
+| **2** | 8× forge L1 | +35% / +35% |
+| **3** | 6× forge L2 | +60% / +60% |
+| **4** | 5× forge L3 | +90% / +90% |
+| **5** | 4× forge L4 | +125% / +125% |
+| **6** | 3× forge L5 | +165% / +165% |
+| **7** | 2× forge L6 | +210% / +210% |
+
+**Level 1** only accepts plain **common** copies (lowest spawn rarity). Higher tiers consume the previous forge level of the same club. **Level 7** is max tier and cannot be merged again. Legacy pre-1.9 merge cards cannot be used in the tiered forge.
+
+**Limits:** **5 merges per player per calendar week** (resets Monday).
 
 | Command | Description |
 | ------- | ----------- |
 | `/fcdex menu` | Directory of all FCDex 3.0 features |
-| `/merge` | Pick two clubballs → confirm → **FCDex Merge** special card |
+| `/merge` | Pick 2–10 matching clubballs (count sets tier) → confirm → forged card |
 
 On install, the extra **creates or repairs** the merge special in your database and reloads the BallsDex cache automatically.
 
@@ -89,7 +101,7 @@ Add to `config/extra.toml` in your BallsDex directory:
 
 ```toml
 [[ballsdex.packages]]
-location = "git+https://github.com/ariel-aram/FCDex-3.0.git@1.8.0"
+location = "git+https://github.com/ariel-aram/FCDex-3.0.git@1.9.1"
 path = "fcdex_3_0"
 enabled = true
 ```
@@ -113,7 +125,7 @@ docker compose up -d
 
 Migrations run automatically via the migration service.
 
-Apply through **`0006`** if upgrading from an earlier 1.5.x install (schedule help-text sync only; no data changes).
+Apply through **`0007`** if upgrading from an earlier 1.8.x install (merge log tier fields).
 
 ### 3 — Configure achievements (optional)
 

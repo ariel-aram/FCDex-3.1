@@ -14,9 +14,7 @@ from fcdex_3_0.models import (
 async def _top_finalists(tournament: Tournament, group: TournamentGroup) -> list[TournamentRegistration]:
     regs = [
         r
-        async for r in TournamentRegistration.objects.filter(
-            tournament=tournament, group=group.value, eliminated=False
-        )
+        async for r in TournamentRegistration.objects.filter(tournament=tournament, group=group.value, eliminated=False)
         .select_related("player")
         .order_by("-score", "player_id")
     ]
@@ -51,9 +49,7 @@ async def create_final_pairing(tournament: Tournament) -> bool:
     winners: list[Player] = []
     async for match in TournamentMatch.objects.filter(
         tournament=tournament, round=TournamentRound.SEMIFINAL, completed=True
-    ).select_related(
-        "winner"
-    ):
+    ).select_related("winner"):
         if match.winner:
             winners.append(match.winner)
     if len(winners) < 2:
@@ -127,9 +123,7 @@ async def explain_no_matches(tournament: Tournament, player: Player) -> str:
             m
             async for m in TournamentMatch.objects.filter(
                 tournament=tournament, round=TournamentRound.SEMIFINAL
-            ).select_related(
-                "player1", "player2"
-            )
+            ).select_related("player1", "player2")
             if m.player1_id == player.pk or m.player2_id == player.pk
         ]
         if not my_semi:

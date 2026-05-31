@@ -26,7 +26,7 @@ def weekly_merge_limit_message(*, limit: int = MERGE_WEEKLY_LIMIT) -> str:
     )
 
 
-def merge_special_blocked_message(special_name: str) -> str:
-    return (
-        f"**{special_name}** cards cannot be merged — they are already forged merge results."
-    )
+def merge_special_blocked_message(special_name: str, *, max_level: int | None = None) -> str:
+    if max_level is not None:
+        return f"**{special_name}** forge **level {max_level}** cards are max tier and cannot be merged further."
+    return f"**{special_name}** cards cannot be merged — they are already forged merge results."

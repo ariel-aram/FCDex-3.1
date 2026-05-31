@@ -8,13 +8,15 @@ from discord.ui import ActionRow, Button, Container, Separator, TextDisplay, but
 
 from ballsdex.core.discord import LayoutView
 from bd_models.models import BallInstance, Player
-from fcdex_3_0.fcdex_ext.bd_helpers import format_instance
+from fcdex_3_0.fcdex_ext.bd_helpers import format_instance, get_ball
+from fcdex_3_0.fcdex_ext.merge_levels import MAX_MERGE_LEVEL, format_level_table_row, get_merge_level_config
 from fcdex_3_0.fcdex_ext.merge_limits import MERGE_WEEKLY_LIMIT
 from fcdex_3_0.fcdex_ext.merge_logic import (
     MergeValidationError,
     count_player_merges_this_week,
     execute_merge,
-    validate_merge_pair,
+    preview_merge_stats,
+    validate_merge_batch,
 )
 from fcdex_3_0.fcdex_ext.merge_special import MERGE_SPECIAL_NAME, get_merge_special
 from fcdex_3_0.fcdex_ext.views import truncate_text
@@ -28,11 +30,10 @@ log = logging.getLogger("fcdex_3_0.merge.views")
 
 
 class MergeConfirmRow(ActionRow):
-    def __init__(self, owner_id: int, first_id: int, second_id: int):
+    def __init__(self, owner_id: int, instance_ids: list[int]):
         super().__init__()
         self.owner_id = owner_id
-        self.first_id = first_id
-        self.second_id = second_id
+        self.instance_ids = instance_ids
 
     @button(label="Forge merge", style=discord.ButtonStyle.success, emoji="✨")
     async def confirm_button(self, interaction: Interaction, button: Button):
@@ -42,17 +43,16 @@ class MergeConfirmRow(ActionRow):
         bot = cast("BallsDexBot", interaction.client)
         await interaction.response.defer()
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
-        first = await BallInstance.objects.select_related("special").aget(pk=self.first_id)
-        second = await BallInstance.objects.select_related("special").aget(pk=self.second_id)
+        instances = [
+            instance
+            async for instance in BallInstance.objects.select_related("special").filter(pk__in=self.instance_ids)
+        ]
+        instances.sort(key=lambda item: self.instance_ids.index(item.pk))
         try:
-            await validate_merge_pair(player, first, second)
-            _, summary, card_file = await execute_merge(
-                player, first, second, guild_id=interaction.guild_id, bot=bot
-            )
+            await validate_merge_batch(player, instances)
+            _, summary, card_file, _ = await execute_merge(player, instances, guild_id=interaction.guild_id, bot=bot)
         except MergeValidationError as exc:
-            layout = await build_merge_confirm_view(
-                bot, self.owner_id, self.first_id, self.second_id, notice=f"❌ {exc.message}"
-            )
+            layout = await build_merge_confirm_view(bot, self.owner_id, self.instance_ids, notice=f"❌ {exc.message}")
             await interaction.edit_original_response(view=layout)
             return
 
@@ -72,40 +72,52 @@ class MergeConfirmRow(ActionRow):
 
 
 async def build_merge_confirm_view(
-    bot: BallsDexBot,
-    owner_id: int,
-    first_id: int,
-    second_id: int,
-    *,
-    notice: str = "",
+    bot: BallsDexBot, owner_id: int, instance_ids: list[int], *, notice: str = ""
 ) -> LayoutView:
     player = await Player.objects.aget(discord_id=owner_id)
-    first = await BallInstance.objects.aget(pk=first_id)
-    second = await BallInstance.objects.aget(pk=second_id)
-    first_label = await format_instance(first)
-    second_label = await format_instance(second)
+    instances = [instance async for instance in BallInstance.objects.filter(pk__in=instance_ids)]
+    instances.sort(key=lambda item: instance_ids.index(item.pk))
+    labels = [await format_instance(instance) for instance in instances]
+    ball = await get_ball(instances[0])
     special = await get_merge_special()
     emoji = special.emoji or "✨"
     merges_this_week = await count_player_merges_this_week(player)
     remaining = max(MERGE_WEEKLY_LIMIT - merges_this_week, 0)
 
+    try:
+        target_level = await validate_merge_batch(player, instances)
+        cfg = get_merge_level_config(target_level)
+        base_attack, base_health, final_attack, final_health = preview_merge_stats(ball, target_level)
+        level_line = (
+            f"**Forge level {target_level}** · `{len(instances)}` inputs → "
+            f"**{emoji} {MERGE_SPECIAL_NAME}** `{ball.country}`\n"
+            f"Stats: **{base_attack}**/{base_health} → **{final_attack}** ATK · **{final_health}** HP "
+            f"(`+{cfg.attack_bonus}%` / `+{cfg.health_bonus}%`)"
+        )
+    except MergeValidationError as exc:
+        level_line = f"❌ {exc.message}"
+
     header = "# ✨ Merge forge"
     if notice:
         header = f"{notice}\n\n{header}"
+
+    card_list = "\n".join(f"• `{label}`" for label in labels)
+    tier_guide = " · ".join(format_level_table_row(level) for level in range(1, MAX_MERGE_LEVEL + 1))
     body = (
-        f"**{first_label}** + **{second_label}**\n"
-        f"→ **{emoji} {MERGE_SPECIAL_NAME}** forged card\n"
-        f"-# Both cards will be consumed if you forge.\n"
+        f"{level_line}\n\n"
+        f"**Inputs ({len(instances)})**\n{card_list}\n\n"
+        f"-# Same clubball only · level 1 needs **common** copies · "
+        f"level {MAX_MERGE_LEVEL} results can't merge again.\n"
+        f"-# Tier guide: {tier_guide}\n"
         f"-# Weekly limit: `{merges_this_week}/{MERGE_WEEKLY_LIMIT}` merges used "
-        f"(`{remaining}` remaining; resets Monday).\n"
-        f"-# **{MERGE_SPECIAL_NAME}** cards cannot be used as merge inputs."
+        f"(`{remaining}` remaining; resets Monday)."
     )
 
     layout = LayoutView(timeout=300)
     container = Container()
-    container.add_item(TextDisplay(truncate_text(f"{header}\n-# {body}")))
+    container.add_item(TextDisplay(truncate_text(f"{header}\n\n{body}")))
     container.add_item(Separator())
-    container.add_item(MergeConfirmRow(owner_id, first_id, second_id))
+    container.add_item(MergeConfirmRow(owner_id, instance_ids))
     layout.add_item(container)
     return layout
 
@@ -113,6 +125,6 @@ async def build_merge_confirm_view(
 async def build_merge_done_view(bot: BallsDexBot, owner_id: int, *, notice: str) -> LayoutView:
     layout = LayoutView(timeout=120)
     container = Container()
-    container.add_item(TextDisplay(truncate_text(f"{notice}\n\n-# Run `/merge` again to forge another pair.")))
+    container.add_item(TextDisplay(truncate_text(f"{notice}\n\n-# Run `/merge` again to forge another batch.")))
     layout.add_item(container)
     return layout

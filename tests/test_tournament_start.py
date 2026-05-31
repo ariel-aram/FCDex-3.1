@@ -20,16 +20,8 @@ def test_two_players_per_group_create_one_match_each():
     assert _group_stage_match_count(2) + _group_stage_match_count(2) == 2
 
 
-@pytest.mark.parametrize(
-    ("legacy_players", "main_players", "expected_matches"),
-    [
-        (4, 0, 6),
-        (2, 2, 2),
-        (3, 1, 3),
-    ],
-)
+@pytest.mark.parametrize(("legacy_players", "main_players", "expected_matches"), [(4, 0, 6), (2, 2, 2), (3, 1, 3)])
 def test_group_stage_match_plan_for_four_registrations(legacy_players, main_players, expected_matches):
     total = _group_stage_match_count(legacy_players) + _group_stage_match_count(main_players)
     assert legacy_players + main_players == 4
     assert total == expected_matches
-

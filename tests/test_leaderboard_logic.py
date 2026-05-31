@@ -1,7 +1,19 @@
 from __future__ import annotations
 
-from fcdex_3_0.fcdex_ext.leaderboard_logic import (
+import sys
+from types import ModuleType
+
+_bd_models = ModuleType("bd_models")
+_bd_models_models = ModuleType("bd_models.models")
+_bd_models_models.BallInstance = object
+_bd_models_models.Player = object
+_bd_models.models = _bd_models_models
+sys.modules.setdefault("bd_models", _bd_models)
+sys.modules.setdefault("bd_models.models", _bd_models_models)
+
+from fcdex_3_0.fcdex_ext.leaderboard_logic import (  # noqa: E402
     ENTRIES_PER_PAGE,
+    UNKNOWN_USER,
     LeaderboardEntry,
     LeaderboardMetric,
     LeaderboardScope,
@@ -60,14 +72,50 @@ def test_normalize_metric_global_unchanged():
 
 
 def test_format_entry_line_medals():
-    first = format_entry_line(LeaderboardEntry(rank=1, discord_id=123, score=42), LeaderboardMetric.CLUBBALLS)
-    second = format_entry_line(LeaderboardEntry(rank=2, discord_id=456, score=30), LeaderboardMetric.CLUBBALLS)
-    fourth = format_entry_line(LeaderboardEntry(rank=4, discord_id=789, score=10), LeaderboardMetric.CLUBBALLS)
+    first = format_entry_line(
+        LeaderboardEntry(rank=1, discord_id=123, score=42), LeaderboardMetric.CLUBBALLS, display_name="Alice"
+    )
+    second = format_entry_line(
+        LeaderboardEntry(rank=2, discord_id=456, score=30), LeaderboardMetric.CLUBBALLS, display_name="Bob"
+    )
+    fourth = format_entry_line(
+        LeaderboardEntry(rank=4, discord_id=789, score=10), LeaderboardMetric.CLUBBALLS, display_name="Carol"
+    )
     assert first.startswith("🥇")
     assert second.startswith("🥈")
     assert "`#4`" in fourth
+    assert "**Alice**" in first
     assert "**42**" in first
     assert "clubballs" in first
+    assert "<@" not in first
+    assert "<@" not in second
+    assert "<@" not in fourth
+
+
+def test_format_leaderboard_body_no_mentions():
+    body = format_leaderboard_body(
+        [LeaderboardEntry(rank=1, discord_id=999, score=5)],
+        scope=LeaderboardScope.GLOBAL,
+        metric=LeaderboardMetric.CLUBBALLS,
+        page=0,
+        total=10,
+        display_names={999: "TestPlayer"},
+    )
+    assert "**TestPlayer**" in body
+    assert "<@999>" not in body
+    assert "<@" not in body
+
+
+def test_format_leaderboard_body_unknown_display_name():
+    body = format_leaderboard_body(
+        [LeaderboardEntry(rank=1, discord_id=999, score=5)],
+        scope=LeaderboardScope.GLOBAL,
+        metric=LeaderboardMetric.CLUBBALLS,
+        page=0,
+        total=10,
+    )
+    assert f"**{UNKNOWN_USER}**" in body
+    assert "<@" not in body
 
 
 def test_format_viewer_footer():
@@ -84,11 +132,7 @@ def test_page_count_and_slice():
 
 def test_format_leaderboard_body_empty():
     body = format_leaderboard_body(
-        [],
-        scope=LeaderboardScope.GLOBAL,
-        metric=LeaderboardMetric.CLUBBALLS,
-        page=0,
-        total=10,
+        [], scope=LeaderboardScope.GLOBAL, metric=LeaderboardMetric.CLUBBALLS, page=0, total=10
     )
     assert "No ranked players yet" in body
     assert "Global" in body

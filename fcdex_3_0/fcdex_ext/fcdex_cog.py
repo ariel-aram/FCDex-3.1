@@ -18,7 +18,7 @@ from fcdex_3_0.fcdex_ext.rarity_views import (
     CATEGORY_MODES,
     build_ball_rarity_layout,
     build_rarity_menu,
-    build_tier_layout,
+    build_rarity_value_layout,
 )
 from fcdex_3_0.fcdex_ext.views import build_panel_layout
 
@@ -45,10 +45,10 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
                 "`/tournament bet` — wager on match outcomes\n"
                 "`/tournament manage` — admin panel (Manage Server)",
                 "### ✨ Merge\n"
-                "`/merge` — pick two cards, confirm, receive a **FCDex Merge** special "
-                "(5/week · merge specials can't be merged again)",
+                "`/merge` — 7-tier forge · same clubball only · L1=10 commons → L7=2 cards "
+                "(5/week · max tier can't merge again)",
                 "### 🏅 Achievements\n`/achievement menu` — catalog, progress, claim rewards",
-                "### 📊 Rarity\n`/fcdex rarity` — official tier lists · lookup · icons · events",
+                "### 📊 Rarity\n`/fcdex rarity` — live dex spawn weights · lookup · spawnable lists",
                 "### 🏆 Leaderboard\n"
                 "`/fcdex leaderboard` — server clubball rankings (default in guild) · toggle **Global** for worldwide stats",
             ],
@@ -56,40 +56,34 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
         )
         await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]
 
-    @app_commands.command(name="rarity", description="Official FCDex tier lists, spawn weights, and clubball lookup")
+    @app_commands.command(name="rarity", description="Live BallsDex spawn weights, rarity lookup, and clubball browse")
     @app_commands.describe(
-        clubball="Look up one clubball on the official sheet",
-        tier="Show obtainable clubballs at this tier (lower = rarer)",
-        category="Browse a rarity category",
+        clubball="Look up one clubball's dex spawn weight",
+        rarity="Show spawnable clubballs at this spawn weight (lower = rarer)",
+        category="Browse spawnable or unspawnable clubballs",
     )
     @app_commands.choices(
         category=[
-            app_commands.Choice(name="Obtainable", value="obtainable"),
-            app_commands.Choice(name="Icons", value="icons"),
-            app_commands.Choice(name="GOAT · Icon", value="goat"),
-            app_commands.Choice(name="Prime clubs", value="prime"),
-            app_commands.Choice(name="Event customs", value="events"),
-            app_commands.Choice(name="Eid customs", value="eid"),
-            app_commands.Choice(name="Exclusive", value="exclusive"),
-            app_commands.Choice(name="Unobtainable", value="unobtainable"),
+            app_commands.Choice(name="Spawnable", value="spawnable"),
+            app_commands.Choice(name="Unspawnable", value="unspawnable"),
         ]
     )
     async def rarity(
         self,
         interaction: discord.Interaction,
         clubball: BallEnabledTransform | None = None,
-        tier: app_commands.Range[int, 1, 99] | None = None,
+        rarity: float | None = None,
         category: app_commands.Choice[str] | None = None,
     ):
-        if clubball is not None and tier is not None:
-            await interaction.response.send_message("Pick either **clubball** or **tier**, not both.", ephemeral=True)
+        if clubball is not None and rarity is not None:
+            await interaction.response.send_message("Pick either **clubball** or **rarity**, not both.", ephemeral=True)
             return
         if clubball is not None:
             layout = await build_ball_rarity_layout(clubball)
             await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]
             return
-        if tier is not None:
-            layout = await build_tier_layout(tier)
+        if rarity is not None:
+            layout = await build_rarity_value_layout(rarity)
             await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]
             return
         mode = category.value if category else "overview"
@@ -116,10 +110,7 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
             app_commands.Choice(name="Merges", value="merges"),
             app_commands.Choice(name="Tournament wins", value="tournament_wins"),
         ],
-        top=[
-            app_commands.Choice(name="Top 10", value="10"),
-            app_commands.Choice(name="Top 20", value="20"),
-        ],
+        top=[app_commands.Choice(name="Top 10", value="10"), app_commands.Choice(name="Top 20", value="20")],
     )
     async def leaderboard(
         self,
@@ -144,6 +135,7 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
         guild_id = interaction.guild.id if interaction.guild else None
         guild_name = interaction.guild.name if interaction.guild else None
         layout = await build_leaderboard_layout(
+            interaction.client,
             interaction.user.id,
             scope=effective_scope,
             metric=metric,

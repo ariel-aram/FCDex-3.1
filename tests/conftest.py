@@ -19,9 +19,17 @@ class _TournamentStatus:
     COMPLETED = "completed"
 
 
-_models_stub = ModuleType("fcdex_3_0.models")
-_models_stub.Tournament = object  # type: ignore[misc, assignment]
-_models_stub.TournamentStatus = _TournamentStatus
+class _ModelsStub(ModuleType):
+    Tournament: type
+    TournamentStatus: type[_TournamentStatus]
+
+    def __init__(self) -> None:
+        super().__init__("fcdex_3_0.models")
+        self.Tournament = object
+        self.TournamentStatus = _TournamentStatus
+
+
+_models_stub = _ModelsStub()
 sys.modules.setdefault("fcdex_3_0.models", _models_stub)
 
 if not settings.configured:

@@ -96,9 +96,7 @@ class Tournament(models.Model):
     match_win_reward = models.PositiveIntegerField(
         default=500, help_text="Fallback coins when no bounty pool is configured on the match."
     )
-    rules = models.TextField(
-        blank=True, default="", help_text="Tournament rules shown in /tournament view overview."
-    )
+    rules = models.TextField(blank=True, default="", help_text="Tournament rules shown in /tournament view overview.")
     betting_enabled = models.BooleanField(default=True)
     min_bet = models.PositiveIntegerField(default=100)
     max_bet = models.PositiveIntegerField(default=50_000)
@@ -257,6 +255,8 @@ class MergeLog(models.Model):
     source_ball1 = models.ForeignKey(BallInstance, on_delete=models.SET_NULL, null=True, related_name="merge_source1")
     source_ball2 = models.ForeignKey(BallInstance, on_delete=models.SET_NULL, null=True, related_name="merge_source2")
     result_ball = models.ForeignKey(BallInstance, on_delete=models.SET_NULL, null=True, related_name="merge_results")
+    merge_level = models.PositiveSmallIntegerField(default=1)
+    source_ids = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

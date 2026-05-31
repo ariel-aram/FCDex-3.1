@@ -7,14 +7,15 @@ import discord
 from discord.ui import ActionRow, Button, Container, Separator, TextDisplay, button
 
 from ballsdex.core.discord import LayoutView
-from fcdex_3_0.fcdex_ext.rarity_data import RarityCategory
+from fcdex_3_0.fcdex_ext.rarity_data import RarityCategory, format_rarity_value
 from fcdex_3_0.fcdex_ext.rarity_logic import (
+    balls_at_rarity,
     build_category_overview,
-    build_obtainable_overview,
+    build_spawnable_overview,
     count_catalog,
-    entries_for_tier,
-    format_entry_line,
-    resolve_ball,
+    fetch_all_balls,
+    format_ball_line,
+    rarity_distribution,
 )
 from fcdex_3_0.fcdex_ext.views import truncate_text
 
@@ -26,29 +27,24 @@ if TYPE_CHECKING:
 log = logging.getLogger("fcdex_3_0.rarity.views")
 
 CATEGORY_MODES: dict[str, RarityCategory] = {
-    "obtainable": RarityCategory.OBTAINABLE,
-    "icons": RarityCategory.ICON,
-    "goat": RarityCategory.GOAT_ICON,
-    "prime": RarityCategory.PRIME,
-    "events": RarityCategory.EVENT,
-    "eid": RarityCategory.EID,
-    "exclusive": RarityCategory.EXCLUSIVE,
-    "unobtainable": RarityCategory.UNOBTAINABLE,
+    "spawnable": RarityCategory.SPAWNABLE,
+    "unspawnable": RarityCategory.UNSPAWNABLE,
 }
 
 
-def _overview_body() -> str:
-    counts = count_catalog()
+def _overview_body(all_balls: list[Ball]) -> str:
+    counts = count_catalog(all_balls)
+    distribution = rarity_distribution(all_balls)
+    distinct = len(distribution)
+    rarest = next(iter(distribution), "—")
     lines = [
-        "Official FCDex rarity uses **fixed tiers** — lower tier = rarer.",
+        "Live **BallsDex spawn weights** — lower value = rarer.",
         "",
-        f"⚽ Obtainable · **{counts['obtainable']}** clubballs",
-        f"🌟 Icons · **{counts['icon']}** · 👑 GOAT · **{counts['goat_icon']}**",
-        f"🏆 Prime · **{counts['prime']}** · 🎉 Events · **{counts['event']}**",
-        f"🌙 Eid · **{counts['eid']}** · 💎 Exclusive · **{counts['exclusive']}**",
-        f"🚫 Unobtainable · **{counts['unobtainable']}**",
+        f"✅ Spawnable · **{counts['spawnable']}** clubballs",
+        f"🚫 Unspawnable · **{counts['unspawnable']}** clubballs",
+        f"📈 **{distinct}** distinct spawn weights · rarest spawnable: **r:{rarest}**",
         "",
-        "-# Use **Category** tabs below · `/fcdex rarity clubball:<card>` for a lookup",
+        "-# Use tabs below · `/fcdex rarity clubball:<card>` · `/fcdex rarity rarity:<value>`",
     ]
     return "\n".join(lines)
 
@@ -64,21 +60,13 @@ class RarityCategoryTabs(ActionRow):
     async def overview_tab(self, interaction: Interaction, button: Button):
         await self._switch(interaction, "overview", 0)
 
-    @button(label="Obtainable", style=discord.ButtonStyle.secondary, emoji="⚽")
-    async def obtainable_tab(self, interaction: Interaction, button: Button):
-        await self._switch(interaction, "obtainable", 0)
+    @button(label="Spawnable", style=discord.ButtonStyle.secondary, emoji="✅")
+    async def spawnable_tab(self, interaction: Interaction, button: Button):
+        await self._switch(interaction, "spawnable", 0)
 
-    @button(label="Icons", style=discord.ButtonStyle.secondary, emoji="🌟")
-    async def icons_tab(self, interaction: Interaction, button: Button):
-        await self._switch(interaction, "icons", 0)
-
-    @button(label="Events", style=discord.ButtonStyle.secondary, emoji="🎉")
-    async def events_tab(self, interaction: Interaction, button: Button):
-        await self._switch(interaction, "events", 0)
-
-    @button(label="Unobtainable", style=discord.ButtonStyle.secondary, emoji="🚫")
-    async def unobtainable_tab(self, interaction: Interaction, button: Button):
-        await self._switch(interaction, "unobtainable", 0)
+    @button(label="Unspawnable", style=discord.ButtonStyle.secondary, emoji="🚫")
+    async def unspawnable_tab(self, interaction: Interaction, button: Button):
+        await self._switch(interaction, "unspawnable", 0)
 
     async def _switch(self, interaction: Interaction, mode: str, page: int) -> None:
         if interaction.user.id != self.owner_id:
@@ -113,26 +101,27 @@ class RarityPageRow(ActionRow):
         if interaction.user.id != self.owner_id:
             await interaction.response.send_message("This menu is private to you.", ephemeral=True)
             return
-        layout = await build_rarity_menu(self.owner_id, mode="obtainable", page=max(0, page))
+        layout = await build_rarity_menu(self.owner_id, mode="spawnable", page=max(0, page))
         await interaction.response.edit_message(view=layout)
 
 
 async def build_rarity_menu(owner_id: int, *, mode: str = "overview", page: int = 0) -> LayoutView:
+    all_balls = await fetch_all_balls()
     layout = LayoutView(timeout=300)
     container = Container()
 
     if mode == "overview":
-        container.add_item(TextDisplay(truncate_text(f"# 📊 FCDex rarity\n\n{_overview_body()}")))
-    elif mode == "obtainable":
-        pages = build_obtainable_overview()
+        container.add_item(TextDisplay(truncate_text(f"# 📊 FCDex rarity\n\n{_overview_body(all_balls)}")))
+    elif mode == "spawnable":
+        pages = build_spawnable_overview(all_balls)
         page = max(0, min(page, len(pages) - 1))
-        footer = f"\n\n-# Page **{page + 1}/{len(pages)}** · lower tier = rarer"
+        footer = f"\n\n-# Page **{page + 1}/{len(pages)}** · lower spawn weight = rarer"
         container.add_item(TextDisplay(truncate_text(pages[page] + footer)))
         if len(pages) > 1:
             container.add_item(Separator())
             container.add_item(RarityPageRow(owner_id, page=page, page_count=len(pages)))
     elif mode in CATEGORY_MODES:
-        body = build_category_overview(CATEGORY_MODES[mode])
+        body = build_category_overview(all_balls, CATEGORY_MODES[mode])
         container.add_item(TextDisplay(truncate_text(body)))
     else:
         container.add_item(TextDisplay("Unknown rarity view."))
@@ -144,30 +133,24 @@ async def build_rarity_menu(owner_id: int, *, mode: str = "overview", page: int 
 
 
 async def build_ball_rarity_layout(ball: Ball) -> LayoutView:
-    entry = resolve_ball(ball)
     layout = LayoutView(timeout=120)
     container = Container()
-    if entry is None:
-        body = (
-            f"# 🔍 {ball.country}\n"
-            f"Not listed on the official FCDex rarity sheet.\n"
-            f"-# Dex spawn weight: `{ball.rarity}`"
-        )
-    else:
-        body = f"# 🔍 {ball.country}\n{format_entry_line(entry, ball=ball)}"
+    body = f"# 🔍 {ball.country}\n{format_ball_line(ball)}"
     container.add_item(TextDisplay(truncate_text(body)))
     layout.add_item(container)
     return layout
 
 
-async def build_tier_layout(tier: int) -> LayoutView:
-    rows = entries_for_tier(tier)
+async def build_rarity_value_layout(rarity: float) -> LayoutView:
+    all_balls = await fetch_all_balls()
+    rows = balls_at_rarity(all_balls, rarity, spawnable_only=True)
     layout = LayoutView(timeout=120)
     container = Container()
+    display = format_rarity_value(rarity)
     if not rows:
-        container.add_item(TextDisplay(f"# Tier {tier}\nNo obtainable clubballs at this tier."))
+        container.add_item(TextDisplay(f"# r:{display}\nNo spawnable clubballs at this spawn weight."))
     else:
-        lines = [format_entry_line(row) for row in rows]
-        container.add_item(TextDisplay(truncate_text(f"# ⚽ Obtainable · Tier {tier}\n\n" + "\n\n".join(lines))))
+        lines = [f"**{row.name}** · `{row.attack}` ATK · `{row.health}` HP" for row in rows]
+        container.add_item(TextDisplay(truncate_text(f"# ✅ Spawnable · r:{display}\n\n" + "\n".join(lines))))
     layout.add_item(container)
     return layout
