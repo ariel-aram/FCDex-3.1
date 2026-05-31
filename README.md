@@ -30,6 +30,18 @@ Registration stays open until the host **starts group stage** in `/tournament ma
 | `/tournament match` | Pending matches — **Start battle**, verify win, claim bounties |
 | `/tournament bet` | Wager coins on a match participant |
 
+### 📊 Rarity system
+
+Official **fixed-tier** lists (not auto-calculated from spawn weights like generic dex extras). Lower tier = rarer.
+
+| Command | Description |
+| ------- | ----------- |
+| `/fcdex rarity` | Hub — obtainable tiers, icons, events, unobtainable |
+| `/fcdex rarity clubball:<card>` | Look up one clubball on the official sheet |
+| `/fcdex rarity tier:<n>` | All obtainable clubballs at tier **n** |
+
+Categories: **Obtainable**, **Icons**, **GOAT · Icon**, **Prime clubs**, **Event customs**, **Eid customs**, **Exclusive**, **Unobtainable**.
+
 Use `/fcdex menu` for a single hub listing every FCDex command group.
 
 ### 🏅 Achievements
@@ -41,6 +53,18 @@ Player achievements with progress tracking and claimable rewards (coins / clubba
 | `/achievement menu` | Hub — catalog, progress, claim |
 
 Configure achievements in the **admin panel** under FCDex 3.0.
+
+### 🏆 Leaderboard
+
+Feel like **#1 on your server**, then flip to **Global** for the reality check.
+
+| Command | Description |
+| ------- | ----------- |
+| `/fcdex leaderboard` | Paginated rankings — **This server** (clubballs caught here) or **Global** |
+| `/fcdex leaderboard sort:<metric>` | Rank by clubballs, battles won, merges, or tournament wins (global stats) |
+| `/fcdex leaderboard top:20` | Show top 10 (default) or top 20 |
+
+Server scope ranks **clubballs caught in that Discord server** only. Global scope adds FCDex stats from `PlayerStats`. In DMs, rankings are always global.
 
 ### ✨ Merge forge
 
@@ -65,7 +89,7 @@ Add to `config/extra.toml` in your BallsDex directory:
 
 ```toml
 [[ballsdex.packages]]
-location = "git+https://github.com/ariel-aram/FCDex-3.0.git@1.6.6"
+location = "git+https://github.com/ariel-aram/FCDex-3.0.git@1.8.0"
 path = "fcdex_3_0"
 enabled = true
 ```
