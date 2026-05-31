@@ -46,6 +46,8 @@ Configure achievements in the **admin panel** under FCDex 3.0.
 
 Sacrifice two clubballs to craft a new card with the **FCDex Merge** special (custom background from the extra’s merge card art). The result inherits one of your parent club types — not a random unrelated ball.
 
+**Limits:** **5 merges per player per calendar week** (resets Monday). Cards that already have the **FCDex Merge** special cannot be used as merge inputs.
+
 | Command | Description |
 | ------- | ----------- |
 | `/fcdex menu` | Directory of all FCDex 3.0 features |
@@ -63,7 +65,7 @@ Add to `config/extra.toml` in your BallsDex directory:
 
 ```toml
 [[ballsdex.packages]]
-location = "git+https://github.com/ariel-aram/FCDex-3.0.git@1.6.3"
+location = "git+https://github.com/ariel-aram/FCDex-3.0.git@1.6.4"
 path = "fcdex_3_0"
 enabled = true
 ```

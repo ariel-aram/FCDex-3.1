@@ -14,7 +14,9 @@ from fcdex_3_0.models import (
 async def _top_finalists(tournament: Tournament, group: TournamentGroup) -> list[TournamentRegistration]:
     regs = [
         r
-        async for r in tournament.registrations.filter(group=group.value, eliminated=False)
+        async for r in TournamentRegistration.objects.filter(
+            tournament=tournament, group=group.value, eliminated=False
+        )
         .select_related("player")
         .order_by("-score", "player_id")
     ]
@@ -25,7 +27,9 @@ async def create_semifinal_pairings(tournament: Tournament) -> int:
     """Create semifinal matches for groups that don't have one yet. Returns count created."""
     created = 0
     for group in TournamentGroup:
-        if await tournament.matches.filter(round=TournamentRound.SEMIFINAL, group=group.value).aexists():
+        if await TournamentMatch.objects.filter(
+            tournament=tournament, round=TournamentRound.SEMIFINAL, group=group.value
+        ).aexists():
             continue
         finalists = await _top_finalists(tournament, group)
         if len(finalists) < 2:
@@ -42,10 +46,12 @@ async def create_semifinal_pairings(tournament: Tournament) -> int:
 
 
 async def create_final_pairing(tournament: Tournament) -> bool:
-    if await tournament.matches.filter(round=TournamentRound.FINAL).aexists():
+    if await TournamentMatch.objects.filter(tournament=tournament, round=TournamentRound.FINAL).aexists():
         return False
     winners: list[Player] = []
-    async for match in tournament.matches.filter(round=TournamentRound.SEMIFINAL, completed=True).select_related(
+    async for match in TournamentMatch.objects.filter(
+        tournament=tournament, round=TournamentRound.SEMIFINAL, completed=True
+    ).select_related(
         "winner"
     ):
         if match.winner:
@@ -93,7 +99,9 @@ async def explain_no_matches(tournament: Tournament, player: Player) -> str:
         )
 
     if status == TournamentStatus.GROUP_STAGE:
-        open_group = await tournament.matches.filter(round=TournamentRound.GROUP, completed=False).acount()
+        open_group = await TournamentMatch.objects.filter(
+            tournament=tournament, round=TournamentRound.GROUP, completed=False
+        ).acount()
         if open_group:
             return (
                 f"No open group matches for you right now (`{reg.score}` pts · {reg.get_group_display()}).\n"
@@ -106,7 +114,9 @@ async def explain_no_matches(tournament: Tournament, player: Player) -> str:
         )
 
     if status == TournamentStatus.SEMIFINALS:
-        semi_count = await tournament.matches.filter(round=TournamentRound.SEMIFINAL).acount()
+        semi_count = await TournamentMatch.objects.filter(
+            tournament=tournament, round=TournamentRound.SEMIFINAL
+        ).acount()
         if semi_count == 0:
             return (
                 "**Semifinals** are active but **no semifinal pairings exist** yet.\n"
@@ -115,7 +125,9 @@ async def explain_no_matches(tournament: Tournament, player: Player) -> str:
             )
         my_semi = [
             m
-            async for m in tournament.matches.filter(round=TournamentRound.SEMIFINAL).select_related(
+            async for m in TournamentMatch.objects.filter(
+                tournament=tournament, round=TournamentRound.SEMIFINAL
+            ).select_related(
                 "player1", "player2"
             )
             if m.player1_id == player.pk or m.player2_id == player.pk
@@ -133,7 +145,7 @@ async def explain_no_matches(tournament: Tournament, player: Player) -> str:
         return "Semifinal pairing exists but isn't listed — host should run **Sync bracket** in `/tournament manage`."
 
     if status == TournamentStatus.FINALS:
-        final = await tournament.matches.filter(round=TournamentRound.FINAL).afirst()
+        final = await TournamentMatch.objects.filter(tournament=tournament, round=TournamentRound.FINAL).afirst()
         if not final:
             return (
                 "**Finals** are active but no grand-final match exists yet.\n"

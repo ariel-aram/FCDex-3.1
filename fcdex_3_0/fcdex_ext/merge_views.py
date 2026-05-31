@@ -9,7 +9,13 @@ from discord.ui import ActionRow, Button, Container, Separator, TextDisplay, but
 from ballsdex.core.discord import LayoutView
 from bd_models.models import BallInstance, Player
 from fcdex_3_0.fcdex_ext.bd_helpers import format_instance
-from fcdex_3_0.fcdex_ext.merge_logic import MergeValidationError, execute_merge, validate_merge_pair
+from fcdex_3_0.fcdex_ext.merge_limits import MERGE_WEEKLY_LIMIT
+from fcdex_3_0.fcdex_ext.merge_logic import (
+    MergeValidationError,
+    count_player_merges_this_week,
+    execute_merge,
+    validate_merge_pair,
+)
 from fcdex_3_0.fcdex_ext.merge_special import MERGE_SPECIAL_NAME, get_merge_special
 from fcdex_3_0.fcdex_ext.views import truncate_text
 
@@ -73,12 +79,15 @@ async def build_merge_confirm_view(
     *,
     notice: str = "",
 ) -> LayoutView:
+    player = await Player.objects.aget(discord_id=owner_id)
     first = await BallInstance.objects.aget(pk=first_id)
     second = await BallInstance.objects.aget(pk=second_id)
     first_label = await format_instance(first)
     second_label = await format_instance(second)
     special = await get_merge_special()
     emoji = special.emoji or "✨"
+    merges_this_week = await count_player_merges_this_week(player)
+    remaining = max(MERGE_WEEKLY_LIMIT - merges_this_week, 0)
 
     header = "# ✨ Merge forge"
     if notice:
@@ -86,7 +95,10 @@ async def build_merge_confirm_view(
     body = (
         f"**{first_label}** + **{second_label}**\n"
         f"→ **{emoji} {MERGE_SPECIAL_NAME}** forged card\n"
-        f"-# Both cards will be consumed if you forge."
+        f"-# Both cards will be consumed if you forge.\n"
+        f"-# Weekly limit: `{merges_this_week}/{MERGE_WEEKLY_LIMIT}` merges used "
+        f"(`{remaining}` remaining; resets Monday).\n"
+        f"-# **{MERGE_SPECIAL_NAME}** cards cannot be used as merge inputs."
     )
 
     layout = LayoutView(timeout=300)

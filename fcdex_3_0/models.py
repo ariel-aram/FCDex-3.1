@@ -129,6 +129,9 @@ class Tournament(models.Model):
     class Meta:
         ordering = ("-created_at",)
 
+    def get_status_display(self) -> str:
+        return TournamentStatus(self.status).label
+
     def __str__(self) -> str:
         return self.name
 
@@ -162,6 +165,7 @@ class TournamentMatch(models.Model):
     )
     player2_id: int | None
     winner = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name="tournament_wins")
+    winner_id: int | None
     score1 = models.IntegerField(default=0)
     score2 = models.IntegerField(default=0)
     completed = models.BooleanField(default=False)
@@ -180,6 +184,9 @@ class TournamentMatch(models.Model):
 
     class Meta:
         ordering = ("created_at",)
+
+    def get_round_display(self) -> str:
+        return TournamentRound(self.round).label
 
     def __str__(self) -> str:
         return f"{self.tournament_id} - {self.round} #{self.pk}"
@@ -214,6 +221,9 @@ class TournamentMatchPrize(models.Model):
 
     class Meta:
         ordering = ("pk",)
+
+    def get_prize_type_display(self) -> str:
+        return TournamentPrizeType(self.prize_type).label
 
     def __str__(self) -> str:
         target = f"match #{self.match_id}" if self.match_id else f"{self.round}/{self.group or 'all'}"

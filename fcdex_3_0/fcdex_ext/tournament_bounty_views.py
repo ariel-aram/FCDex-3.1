@@ -395,18 +395,21 @@ class BountyStashModal(Modal, title="Stash round bounty"):
             return
         round_raw = self.round.value.strip().lower()
         try:
-            round_value = TournamentRound(round_raw).value
+            TournamentRound(round_raw)
         except ValueError:
             await interaction.response.send_message("Round must be `group`, `semifinal`, or `final`.", ephemeral=True)
             return
+        round_value = round_raw
 
         group_value: str | None = None
         if self.group.value.strip():
+            group_raw = self.group.value.strip().lower()
             try:
-                group_value = TournamentGroup(self.group.value.strip().lower()).value
+                TournamentGroup(group_raw)
             except ValueError:
                 await interaction.response.send_message("Group must be `legacy` or `main`.", ephemeral=True)
                 return
+            group_value = group_raw
 
         ptype = self.prize_type.value.strip().lower()
         if ptype not in (TournamentPrizeType.COINS, TournamentPrizeType.RANDOM_COMMON):
@@ -437,7 +440,7 @@ class BountyStashModal(Modal, title="Stash round bounty"):
             await interaction.response.send_message(str(exc), ephemeral=True)
             return
 
-        scope = round_value + (f" · {group_value}" if group_value else "")
+        scope = f"{round_value}{f' · {group_value}' if group_value else ''}"
         view = await build_tournament_bounty_hub(
             self.owner_id, self.tournament_id, notice=f"✅ Stashed bounty **#{prize.pk}** for **{scope}**."
         )

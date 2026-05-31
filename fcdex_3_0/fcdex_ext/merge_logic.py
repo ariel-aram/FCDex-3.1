@@ -8,7 +8,14 @@ import discord
 
 from bd_models.models import Ball, BallInstance, Player, balls
 from fcdex_3_0.fcdex_ext.bd_helpers import format_instance
-from fcdex_3_0.fcdex_ext.merge_special import get_merge_special
+from fcdex_3_0.fcdex_ext.merge_limits import (
+    MERGE_WEEKLY_LIMIT,
+    calendar_week_bounds,
+    merge_special_blocked_message,
+    weekly_merge_limit_message,
+    weekly_merge_limit_reached,
+)
+from fcdex_3_0.fcdex_ext.merge_special import MERGE_SPECIAL_NAME, get_merge_special
 from fcdex_3_0.fcdex_ext.services import increment_stat
 from fcdex_3_0.models import MergeLog
 from settings.models import settings
@@ -23,6 +30,22 @@ class MergeValidationError(Exception):
         super().__init__(message)
 
 
+async def count_player_merges_this_week(player: Player) -> int:
+    week_start, week_end = calendar_week_bounds()
+    return await MergeLog.objects.filter(
+        player=player,
+        created_at__gte=week_start,
+        created_at__lt=week_end,
+    ).acount()
+
+
+async def instance_has_merge_special(instance: BallInstance) -> bool:
+    if not instance.special_id:
+        return False
+    merge_special = await get_merge_special()
+    return instance.special_id == merge_special.pk
+
+
 async def validate_merge_pair(player: Player, first: BallInstance, second: BallInstance) -> None:
     if first.pk == second.pk:
         raise MergeValidationError("Pick two different clubballs.")
@@ -32,20 +55,11 @@ async def validate_merge_pair(player: Player, first: BallInstance, second: BallI
         raise MergeValidationError("One of these cards is no longer available.")
     if await first.is_locked() or await second.is_locked():
         raise MergeValidationError("One of these cards is locked for a trade.")
-
-
-async def load_mergeable_instances(player: Player, *, exclude_id: int | None = None) -> list[BallInstance]:
-    instances: list[BallInstance] = []
-    queryset = BallInstance.objects.filter(player=player, deleted=False).select_related("ball").order_by("-pk")
-    async for instance in queryset[:50]:
-        if exclude_id is not None and instance.pk == exclude_id:
-            continue
-        if await instance.is_locked():
-            continue
-        instances.append(instance)
-        if len(instances) >= 25:
-            break
-    return instances
+    if await instance_has_merge_special(first) or await instance_has_merge_special(second):
+        raise MergeValidationError(merge_special_blocked_message(MERGE_SPECIAL_NAME))
+    merges_this_week = await count_player_merges_this_week(player)
+    if weekly_merge_limit_reached(merges_this_week):
+        raise MergeValidationError(weekly_merge_limit_message(limit=MERGE_WEEKLY_LIMIT))
 
 
 async def resolve_result_ball(first: BallInstance, second: BallInstance) -> Ball:

@@ -12,7 +12,14 @@ from fcdex_3_0.fcdex_ext.tournament_bracket import explain_no_matches
 from fcdex_3_0.fcdex_ext.tournament_loot import load_match_prizes
 from fcdex_3_0.fcdex_ext.tournament_match import claim_match_victory, list_pending_matches
 from fcdex_3_0.fcdex_ext.views import truncate_text
-from fcdex_3_0.models import Tournament, TournamentGroup, TournamentMatch, TournamentRound, TournamentStatus
+from fcdex_3_0.models import (
+    Tournament,
+    TournamentGroup,
+    TournamentMatch,
+    TournamentRegistration,
+    TournamentRound,
+    TournamentStatus,
+)
 
 if TYPE_CHECKING:
     from discord import Interaction
@@ -67,7 +74,9 @@ async def build_seeding_sections(tournament: Tournament) -> list[str]:
     for group in TournamentGroup:
         regs = [
             r
-            async for r in tournament.registrations.filter(group=group.value)
+            async for r in TournamentRegistration.objects.filter(
+                tournament=tournament, group=group.value
+            )
             .select_related("player")
             .order_by("-score", "player_id")
         ]
@@ -86,14 +95,16 @@ async def build_seeding_sections(tournament: Tournament) -> list[str]:
 
 
 async def build_bracket_sections(tournament: Tournament) -> list[str]:
-    if await tournament.matches.acount() == 0:
+    if await TournamentMatch.objects.filter(tournament=tournament).acount() == 0:
         return await build_seeding_sections(tournament)
 
     sections: list[str] = []
     for group in TournamentGroup:
         group_matches = [
             m
-            async for m in tournament.matches.filter(round=TournamentRound.GROUP, group=group.value)
+            async for m in TournamentMatch.objects.filter(
+                tournament=tournament, round=TournamentRound.GROUP, group=group.value
+            )
             .select_related("player1", "player2", "winner")
             .order_by("pk")
         ]
@@ -105,7 +116,7 @@ async def build_bracket_sections(tournament: Tournament) -> list[str]:
     for round_value, round_title in ((TournamentRound.SEMIFINAL, "Semifinals"), (TournamentRound.FINAL, "Grand final")):
         knockout = [
             m
-            async for m in tournament.matches.filter(round=round_value)
+            async for m in TournamentMatch.objects.filter(tournament=tournament, round=round_value)
             .select_related("player1", "player2", "winner")
             .order_by("group", "pk")
         ]

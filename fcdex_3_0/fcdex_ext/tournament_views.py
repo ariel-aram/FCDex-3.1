@@ -15,7 +15,7 @@ from fcdex_3_0.fcdex_ext.tournament_schedule import (
     schedule_summary_lines,
 )
 from fcdex_3_0.fcdex_ext.views import build_tournament_layout, truncate_text
-from fcdex_3_0.models import Tournament, TournamentStatus
+from fcdex_3_0.models import Tournament, TournamentRegistration, TournamentStatus
 
 if TYPE_CHECKING:
     from discord import Interaction
@@ -531,7 +531,7 @@ class TournamentHostControls(ActionRow):
         if error := await run_tournament_start(tournament):
             await interaction.response.send_message(error, ephemeral=True)
             return
-        count = await tournament.registrations.acount()
+        count = await TournamentRegistration.objects.filter(tournament=tournament).acount()
         view = TournamentManageView(
             self.owner_id, notice=f"▶ **{tournament.name}** group stage started with **{count}** players!"
         )

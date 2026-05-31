@@ -30,7 +30,9 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
                 "`/tournament match` — battles, bounties, verified wins\n"
                 "`/tournament bet` — wager on match outcomes\n"
                 "`/tournament manage` — admin panel (Manage Server)",
-                "### ✨ Merge\n`/merge` — pick two cards, confirm, receive a **FCDex Merge** special",
+                "### ✨ Merge\n"
+                "`/merge` — pick two cards, confirm, receive a **FCDex Merge** special "
+                "(5/week · merge specials can't be merged again)",
                 "### 🏅 Achievements\n`/achievement menu` — catalog, progress, claim rewards",
             ],
             footer="-# Configure achievements & tournaments in the admin panel under FCDex 3.0",

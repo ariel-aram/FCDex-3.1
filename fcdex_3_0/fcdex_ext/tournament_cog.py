@@ -111,7 +111,7 @@ async def run_tournament_start(tournament: Tournament) -> str | None:
         return "This tournament has already started."
     if reason := start_blocked_reason(tournament):
         return reason
-    count = await tournament.registrations.acount()
+    count = await TournamentRegistration.objects.filter(tournament=tournament).acount()
     if count < 2:
         return "Need at least 2 players to start."
 
@@ -121,7 +121,10 @@ async def run_tournament_start(tournament: Tournament) -> str | None:
 
     for group in TournamentGroup:
         players = [
-            reg.player async for reg in tournament.registrations.filter(group=group.value).select_related("player")
+            reg.player
+            async for reg in TournamentRegistration.objects.filter(
+                tournament=tournament, group=group.value
+            ).select_related("player")
         ]
         for p1, p2 in itertools.combinations(players, 2):
             await TournamentMatch.objects.acreate(
@@ -135,7 +138,9 @@ async def run_tournament_advance(tournament: Tournament) -> tuple[bool, str]:
         return False, reason
 
     if tournament.status == TournamentStatus.GROUP_STAGE:
-        pending_group = await tournament.matches.filter(round=TournamentRound.GROUP, completed=False).acount()
+        pending_group = await TournamentMatch.objects.filter(
+            tournament=tournament, round=TournamentRound.GROUP, completed=False
+        ).acount()
         if pending_group:
             return False, (
                 f"**{pending_group}** group-stage match(es) still open — "
@@ -146,7 +151,7 @@ async def run_tournament_advance(tournament: Tournament) -> tuple[bool, str]:
         for group in TournamentGroup:
             regs = [
                 r
-                async for r in tournament.registrations.filter(group=group.value)
+                async for r in TournamentRegistration.objects.filter(tournament=tournament, group=group.value)
                 .select_related("player")
                 .order_by("-score")
             ]
@@ -161,7 +166,9 @@ async def run_tournament_advance(tournament: Tournament) -> tuple[bool, str]:
 
             finalists = [r for r in regs if not r.eliminated][:2]
             if len(finalists) == 2:
-                if not await tournament.matches.filter(round=TournamentRound.SEMIFINAL, group=group.value).aexists():
+                if not await TournamentMatch.objects.filter(
+                    tournament=tournament, round=TournamentRound.SEMIFINAL, group=group.value
+                ).aexists():
                     await TournamentMatch.objects.acreate(
                         tournament=tournament,
                         round=TournamentRound.SEMIFINAL,
@@ -181,20 +188,22 @@ async def run_tournament_advance(tournament: Tournament) -> tuple[bool, str]:
         if semis:
             return True, f"Created **{semis}** missing semifinal pairing(s). Players can use `/tournament match` now."
 
-        pending = await tournament.matches.filter(round=TournamentRound.SEMIFINAL, completed=False).acount()
+        pending = await TournamentMatch.objects.filter(
+            tournament=tournament, round=TournamentRound.SEMIFINAL, completed=False
+        ).acount()
         if pending:
             return False, (
                 f"**{pending}** semifinal match(es) still open — "
                 "players must finish battles via `/tournament match` first."
             )
 
-        if await tournament.matches.filter(round=TournamentRound.FINAL).aexists():
+        if await TournamentMatch.objects.filter(tournament=tournament, round=TournamentRound.FINAL).aexists():
             return False, "Grand final already exists."
 
         winners: list[Player] = []
-        async for match in tournament.matches.filter(round=TournamentRound.SEMIFINAL, completed=True).select_related(
-            "winner"
-        ):
+        async for match in TournamentMatch.objects.filter(
+            tournament=tournament, round=TournamentRound.SEMIFINAL, completed=True
+        ).select_related("winner"):
             if match.winner:
                 winners.append(match.winner)
 
@@ -214,7 +223,7 @@ async def run_tournament_advance(tournament: Tournament) -> tuple[bool, str]:
             return True, "Grand final match created! Finalists use `/tournament match` → **Start battle**."
 
         final = (
-            await tournament.matches.filter(round=TournamentRound.FINAL)
+            await TournamentMatch.objects.filter(tournament=tournament, round=TournamentRound.FINAL)
             .select_related("player1", "player2", "winner")
             .afirst()
         )

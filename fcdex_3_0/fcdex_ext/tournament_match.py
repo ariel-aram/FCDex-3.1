@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from django.utils import timezone
+
 from bd_models.models import Player
 from fcdex_3_0.fcdex_ext.tournament_bets import resolve_bets_for_match
 from fcdex_3_0.fcdex_ext.tournament_loot import grant_match_loot, load_match_prizes
@@ -9,11 +11,43 @@ from fcdex_3_0.models import Tournament, TournamentGroup, TournamentMatch, Tourn
 async def list_pending_matches(tournament: Tournament, player: Player) -> list[TournamentMatch]:
     matches: list[TournamentMatch] = []
     async for match in (
-        tournament.matches.filter(completed=False).select_related("player1", "player2").order_by("round", "created_at")
+        TournamentMatch.objects.filter(tournament=tournament, completed=False)
+        .select_related("player1", "player2")
+        .order_by("round", "created_at")
     ):
         if match.player1_id == player.pk or match.player2_id == player.pk:
             matches.append(match)
     return matches
+
+
+async def record_battle_verification(match_id: int, winner: Player) -> tuple[bool, str]:
+    match = await TournamentMatch.objects.select_related("player1", "player2").aget(pk=match_id)
+    if match.completed:
+        return False, "This tournament match is already completed."
+    if winner.pk not in (match.player1_id, match.player2_id):
+        return False, "Battle winner is not a participant in this tournament match."
+
+    updated = await TournamentMatch.objects.filter(pk=match_id, completed=False).aupdate(
+        verified_winner_id=winner.pk, verified_at=timezone.now()
+    )
+    if not updated:
+        return False, "This tournament match is already completed."
+    return True, "Battle result verified."
+
+
+async def apply_verified_battle_result(match_id: int, winner: Player, *, guild_id: int | None) -> tuple[bool, str]:
+    match = await TournamentMatch.objects.aget(pk=match_id)
+    if match.completed:
+        return False, "This tournament match is already completed."
+    tournament = await Tournament.objects.aget(pk=match.tournament_id)
+    ok, message = await record_battle_verification(match_id, winner)
+    if not ok:
+        return False, message
+    match = await TournamentMatch.objects.aget(pk=match_id)
+    claimed, claim_message = await claim_match_victory(tournament, match, winner, guild_id=guild_id)
+    if claimed:
+        return True, claim_message
+    return False, claim_message
 
 
 async def claim_match_victory(

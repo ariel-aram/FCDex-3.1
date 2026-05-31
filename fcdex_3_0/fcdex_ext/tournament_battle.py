@@ -4,11 +4,11 @@ import logging
 from typing import TYPE_CHECKING
 
 import discord
-from django.utils import timezone
 
 from ballsdex.core.discord import LayoutView
 from bd_models.models import Player
-from fcdex_3_0.fcdex_ext.tournament_match import claim_match_victory
+from fcdex_3_0.fcdex_ext.battle_cog import ActiveBattle, _active_battles, fetch_battle
+from fcdex_3_0.fcdex_ext.views import BattleLayoutView
 from fcdex_3_0.models import Tournament, TournamentMatch
 
 if TYPE_CHECKING:
@@ -31,42 +31,9 @@ async def find_open_match_between(tournament_id: int, player_a_id: int, player_b
     return None
 
 
-async def record_battle_verification(match_id: int, winner: Player) -> tuple[bool, str]:
-    match = await TournamentMatch.objects.select_related("player1", "player2").aget(pk=match_id)
-    if match.completed:
-        return False, "This tournament match is already completed."
-    if winner.pk not in (match.player1_id, match.player2_id):
-        return False, "Battle winner is not a participant in this tournament match."
-
-    updated = await TournamentMatch.objects.filter(pk=match_id, completed=False).aupdate(
-        verified_winner_id=winner.pk, verified_at=timezone.now()
-    )
-    if not updated:
-        return False, "This tournament match is already completed."
-    return True, "Battle result verified."
-
-
-async def apply_verified_battle_result(match_id: int, winner: Player, *, guild_id: int | None) -> tuple[bool, str]:
-    match = await TournamentMatch.objects.aget(pk=match_id)
-    if match.completed:
-        return False, "This tournament match is already completed."
-    tournament = await Tournament.objects.aget(pk=match.tournament_id)
-    ok, message = await record_battle_verification(match_id, winner)
-    if not ok:
-        return False, message
-    match = await TournamentMatch.objects.aget(pk=match_id)
-    claimed, claim_message = await claim_match_victory(tournament, match, winner, guild_id=guild_id)
-    if claimed:
-        return True, claim_message
-    return False, claim_message
-
-
 async def start_tournament_match_battle(
     interaction: discord.Interaction, bot: BallsDexBot, match: TournamentMatch, initiator: discord.Member
 ) -> tuple[bool, str | LayoutView]:
-    from fcdex_3_0.fcdex_ext.battle_cog import ActiveBattle, _active_battles, fetch_battle
-    from fcdex_3_0.fcdex_ext.views import BattleLayoutView
-
     if not isinstance(interaction.guild, discord.Guild):
         return False, "Battles can only be started in a server."
     if match.completed:
