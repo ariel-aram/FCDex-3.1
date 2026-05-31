@@ -39,8 +39,8 @@ async def build_catalog_body() -> str:
     return "\n\n".join(lines[:25]) if lines else ""
 
 
-async def build_progress_body(target: discord.User | discord.Member) -> tuple[str, str]:
-    player, _ = await Player.objects.aget_or_create(discord_id=target.id)
+async def build_progress_body(owner_id: int) -> tuple[str, str]:
+    player, _ = await Player.objects.aget_or_create(discord_id=owner_id)
     await get_or_create_stats(player)
     await check_achievements(player)
 
@@ -91,19 +91,16 @@ class AchievementClaimSelect(discord.ui.Select):
             await interaction.response.send_message("This menu is private to you.", ephemeral=True)
             return
         achievement = await Achievement.objects.filter(enabled=True, hidden=False).aget(pk=int(self.values[0]))
-        player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
+        player, _ = await Player.objects.aget_or_create(discord_id=self.owner_id)
         _success, message = await claim_achievement(player, achievement)
-        layout = await build_achievement_menu(
-            self.owner_id, mode="claim_result", extra=message, target=interaction.user
-        )
+        layout = await build_achievement_menu(self.owner_id, mode="claim_result", extra=message)
         await interaction.response.edit_message(view=layout)
 
 
 class AchievementTabControls(ActionRow):
-    def __init__(self, owner_id: int, target: discord.User | discord.Member | None = None):
+    def __init__(self, owner_id: int):
         super().__init__()
         self.owner_id = owner_id
-        self.target = target
 
     @button(label="Catalog", style=discord.ButtonStyle.primary, emoji="🏅")
     async def catalog_tab(self, interaction: Interaction, button: Button):
@@ -121,17 +118,15 @@ class AchievementTabControls(ActionRow):
         if interaction.user.id != self.owner_id:
             await interaction.response.send_message("This menu is private to you.", ephemeral=True)
             return
-        target = self.target or interaction.user
-        layout = await build_achievement_menu(self.owner_id, mode=mode, target=target)
+        layout = await build_achievement_menu(self.owner_id, mode=mode)
         await interaction.response.edit_message(view=layout)
 
 
 async def build_achievement_menu(
-    owner_id: int, *, mode: str = "catalog", target: discord.User | discord.Member | None = None, extra: str = ""
+    owner_id: int, *, mode: str = "catalog", extra: str = ""
 ) -> LayoutView:
     layout = LayoutView(timeout=300)
     container = Container()
-    progress_target = target
 
     if mode == "catalog":
         body = await build_catalog_body()
@@ -139,14 +134,8 @@ async def build_achievement_menu(
         title = "🏅 Achievement catalog"
         subtitle = "All public achievements and rewards"
     elif mode == "progress":
-        user = progress_target
-        if user is None:
-            content = "*Could not load player.*"
-            title = "📊 Progress"
-            subtitle = ""
-        else:
-            subtitle, content = await build_progress_body(user)
-            title = f"📊 Progress · {user.display_name}"
+        subtitle, content = await build_progress_body(owner_id)
+        title = "📊 Your progress"
     elif mode == "claim":
         player, _ = await Player.objects.aget_or_create(discord_id=owner_id)
         claimable = await load_claimable(player)
@@ -155,7 +144,7 @@ async def build_achievement_menu(
             content = "*Nothing ready to claim. Check **Progress** for goals.*"
             container.add_item(TextDisplay(truncate_text(f"# {title}\n{content}")))
             container.add_item(Separator())
-            container.add_item(AchievementTabControls(owner_id, progress_target))
+            container.add_item(AchievementTabControls(owner_id))
             layout.add_item(container)
             return layout
         container.add_item(TextDisplay("# 🎁 Claim rewards\nSelect a completed achievement below."))
@@ -163,7 +152,7 @@ async def build_achievement_menu(
         row = ActionRow()
         row.add_item(AchievementClaimSelect(owner_id, claimable))
         container.add_item(row)
-        container.add_item(AchievementTabControls(owner_id, progress_target))
+        container.add_item(AchievementTabControls(owner_id))
         layout.add_item(container)
         return layout
     elif mode == "claim_result":
@@ -180,6 +169,6 @@ async def build_achievement_menu(
         header += f"\n-# {subtitle}"
     container.add_item(TextDisplay(truncate_text(f"{header}\n\n{content}")))
     container.add_item(Separator())
-    container.add_item(AchievementTabControls(owner_id, progress_target))
+    container.add_item(AchievementTabControls(owner_id))
     layout.add_item(container)
     return layout

@@ -42,8 +42,8 @@ class MergeConfirmRow(ActionRow):
         bot = cast("BallsDexBot", interaction.client)
         await interaction.response.defer()
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
-        first = await BallInstance.objects.aget(pk=self.first_id)
-        second = await BallInstance.objects.aget(pk=self.second_id)
+        first = await BallInstance.objects.select_related("special").aget(pk=self.first_id)
+        second = await BallInstance.objects.select_related("special").aget(pk=self.second_id)
         try:
             await validate_merge_pair(player, first, second)
             _, summary, card_file = await execute_merge(

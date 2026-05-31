@@ -5,8 +5,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
 import discord
+from django.db.models import Q
 
-from bd_models.models import Ball, BallInstance, Player, balls
+from bd_models.models import Ball, BallInstance, Player, Special, balls
 from fcdex_3_0.fcdex_ext.bd_helpers import format_instance
 from fcdex_3_0.fcdex_ext.merge_limits import (
     MERGE_WEEKLY_LIMIT,
@@ -40,10 +41,20 @@ async def count_player_merges_this_week(player: Player) -> int:
 
 
 async def instance_has_merge_special(instance: BallInstance) -> bool:
-    if not instance.special_id:
-        return False
     merge_special = await get_merge_special()
-    return instance.special_id == merge_special.pk
+    if instance.special_id == merge_special.pk:
+        return True
+    if instance.special_id:
+        special = await Special.objects.filter(pk=instance.special_id).afirst()
+        if special is not None and special.name == MERGE_SPECIAL_NAME:
+            return True
+    return False
+
+
+async def instance_already_used_in_merge(instance_id: int) -> bool:
+    return await MergeLog.objects.filter(
+        Q(source_ball1_id=instance_id) | Q(source_ball2_id=instance_id) | Q(result_ball_id=instance_id)
+    ).aexists()
 
 
 async def validate_merge_pair(player: Player, first: BallInstance, second: BallInstance) -> None:
@@ -53,6 +64,8 @@ async def validate_merge_pair(player: Player, first: BallInstance, second: BallI
         raise MergeValidationError(f"Both {settings.plural_collectible_name} must belong to you.")
     if first.deleted or second.deleted:
         raise MergeValidationError("One of these cards is no longer available.")
+    if await instance_already_used_in_merge(first.pk) or await instance_already_used_in_merge(second.pk):
+        raise MergeValidationError("One of these cards was already used in a merge.")
     if await first.is_locked() or await second.is_locked():
         raise MergeValidationError("One of these cards is locked for a trade.")
     if await instance_has_merge_special(first) or await instance_has_merge_special(second):
@@ -78,6 +91,13 @@ async def resolve_result_ball(first: BallInstance, second: BallInstance) -> Ball
     return random.choices(enabled, weights=[ball.rarity for ball in enabled], k=1)[0]
 
 
+async def consume_merge_inputs(first_id: int, second_id: int) -> None:
+    consumed_first = await BallInstance.objects.filter(pk=first_id, deleted=False).aupdate(deleted=True)
+    consumed_second = await BallInstance.objects.filter(pk=second_id, deleted=False).aupdate(deleted=True)
+    if consumed_first != 1 or consumed_second != 1:
+        raise MergeValidationError("One of these cards is no longer available.")
+
+
 async def execute_merge(
     player: Player, first: BallInstance, second: BallInstance, *, guild_id: int | None, bot: BallsDexBot
 ) -> tuple[BallInstance, str, discord.File]:
@@ -88,10 +108,9 @@ async def execute_merge(
     attack_bonus = random.randint(-settings.max_attack_bonus, settings.max_attack_bonus)
     health_bonus = random.randint(-settings.max_health_bonus, settings.max_health_bonus)
 
+    await consume_merge_inputs(first.pk, second.pk)
     first.deleted = True
     second.deleted = True
-    await first.asave(update_fields=("deleted",))
-    await second.asave(update_fields=("deleted",))
 
     new_instance = await BallInstance.objects.acreate(
         ball=result_ball,

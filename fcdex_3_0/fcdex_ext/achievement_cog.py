@@ -35,8 +35,7 @@ class AchievementCog(commands.GroupCog, group_name="achievement"):
     def __init__(self, bot: BallsDexBot):
         self.bot = bot
 
-    @app_commands.command(name="menu", description="Browse achievements, track progress, and claim rewards")
-    async def menu(self, interaction: discord.Interaction, user: discord.User | None = None):
-        target = user or interaction.user
-        layout = await build_achievement_menu(interaction.user.id, mode="catalog", target=target)
+    @app_commands.command(name="menu", description="Browse your achievements, track progress, and claim rewards")
+    async def menu(self, interaction: discord.Interaction):
+        layout = await build_achievement_menu(interaction.user.id, mode="catalog")
         await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]

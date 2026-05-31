@@ -77,8 +77,15 @@ def _load_merge_logic_for_validation_tests():
         fcdex_models = ModuleType("fcdex_3_0.models")
 
     merge_log_manager = MagicMock()
-    merge_log_manager.filter.return_value.acount = AsyncMock(return_value=0)
+    merge_log_filter = MagicMock()
+    merge_log_filter.acount = AsyncMock(return_value=0)
+    merge_log_filter.aexists = AsyncMock(return_value=False)
+    merge_log_manager.filter.return_value = merge_log_filter
     fcdex_models.MergeLog = SimpleNamespace(objects=merge_log_manager)
+
+    special_manager = MagicMock()
+    special_manager.filter.return_value.afirst = AsyncMock(return_value=None)
+    bd_models_models.Special = SimpleNamespace(objects=special_manager)
 
     stubs = {
         "bd_models": bd_models,
@@ -169,3 +176,20 @@ def test_validate_merge_pair_blocks_sixth_weekly_merge():
 
     assert str(MERGE_WEEKLY_LIMIT) in exc.value.message
     assert "weekly merge limit" in exc.value.message
+
+
+def test_validate_merge_pair_blocks_already_merged_instance():
+    merge_logic, merge_log_manager = _load_merge_logic_for_validation_tests()
+    player = SimpleNamespace(pk=1)
+    first = _make_instance(pk=1, player_id=1)
+    second = _make_instance(pk=2, player_id=1)
+    merge_special = SimpleNamespace(pk=42, name="FCDex Merge", emoji="✨")
+
+    merge_logic.get_merge_special = AsyncMock(return_value=merge_special)
+    merge_log_manager.filter.return_value.acount = AsyncMock(return_value=0)
+    merge_log_manager.filter.return_value.aexists = AsyncMock(return_value=True)
+
+    with pytest.raises(merge_logic.MergeValidationError) as exc:
+        asyncio.run(merge_logic.validate_merge_pair(player, first, second))
+
+    assert "already used in a merge" in exc.value.message
