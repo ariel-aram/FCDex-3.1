@@ -42,8 +42,8 @@ def _group_label(value: str | None) -> str:
         return value.title()
 
 
-def format_match_line(match: TournamentMatch, *, index: int | None = None) -> str:
-    prefix = f"**M{index}** · " if index else ""
+def format_match_line(match: TournamentMatch) -> str:
+    prefix = f"**#{match.pk}** · "
     group = _group_label(match.group)
     group_tag = f"`{group}` · " if group else ""
     p1 = f"<@{match.player1.discord_id}>"
@@ -110,7 +110,7 @@ async def build_bracket_sections(tournament: Tournament) -> list[str]:
         ]
         if not group_matches:
             continue
-        lines = [format_match_line(m, index=i) for i, m in enumerate(group_matches, start=1)]
+        lines = [format_match_line(m) for m in group_matches]
         sections.append(f"### 📋 {group.label} · Group stage\n" + "\n".join(lines))
 
     for round_value, round_title in ((TournamentRound.SEMIFINAL, "Semifinals"), (TournamentRound.FINAL, "Grand final")):
@@ -124,8 +124,8 @@ async def build_bracket_sections(tournament: Tournament) -> list[str]:
             continue
         blocks = [
             f"**{round_title}{' · `' + _group_label(m.group) + '`' if m.group else ''}**\n"
-            f"{format_match_line(m, index=i)}"
-            for i, m in enumerate(knockout, start=1)
+            f"{format_match_line(m)}"
+            for m in knockout
         ]
         sections.append(f"### 🗂️ {round_title}\n\n" + "\n\n".join(blocks))
 
@@ -272,6 +272,6 @@ async def build_tournament_match_menu(owner_id: int, tournament_id: int, *, noti
     header = "# ⚔️ Tournament matches"
     if notice:
         header += f"\n{notice}"
-    header += f"\n-# **{tournament.name}** · **Start battle** to verify wins · `/tournament bet`"
+    header += f"\n-# **{tournament.name}** · **Start battle** to verify wins · match **#** on Bracket tab for `/tournament bet`"
 
     return TournamentMatchMenuLayout(owner_id, tournament_id, pending=pending, header=header, body=body)

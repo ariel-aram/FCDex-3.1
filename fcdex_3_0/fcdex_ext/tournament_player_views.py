@@ -71,7 +71,8 @@ async def build_overview_sections(tournament: Tournament, viewer_id: int | None 
         + ("\n" + "\n".join(schedule_lines) if schedule_lines else ""),
         rules_text,
         tournament.description or "*No description provided.*",
-        "-# **Bracket** tab · `/tournament match` (**Start battle**) · `/tournament bet`",
+        "-# **Bracket** tab shows **match #** for bets · `/tournament match` (**Start battle**) · "
+        "`/tournament bet <match_id> <amount> @participant`",
     ]
 
 
