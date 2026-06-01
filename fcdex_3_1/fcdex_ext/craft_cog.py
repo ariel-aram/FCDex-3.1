@@ -31,7 +31,8 @@ class CraftCog(commands.GroupCog, group_name="craft"):
                 f"**{recipe.name}** — **{recipe.required_count}×** {req} → **{rew}**"
                 + (f" · **+{recipe.reward_money:,}** coins" if recipe.reward_money else "")
             )
-        body = "\n".join(lines) if lines else "*No SBC recipes yet — add them in the admin panel under FCDex 3.1.*"
+        empty = "*No SBC recipes yet — add them in `/fcdex admin` → Craft or the web panel.*"
+        body = "\n".join(lines) if lines else empty
         layout = build_panel_layout(
             title="FCDex 3.1 · Craft",
             subtitle="Squad Building Challenges",

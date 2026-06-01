@@ -141,7 +141,7 @@ class PlayerQuestProgressAdmin(admin.ModelAdmin):
 
 class ShopBundleItemInline(admin.TabularInline):
     model = ShopBundleItem
-    autocomplete_fields = ("ball",)
+    autocomplete_fields = ("ball", "special")
     extra = 1
 
 

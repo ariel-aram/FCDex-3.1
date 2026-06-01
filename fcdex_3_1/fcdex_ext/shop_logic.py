@@ -13,8 +13,9 @@ async def list_shop_bundles(*, enabled_only: bool = True) -> list[ShopBundle]:
 
 async def format_bundle_line_async(bundle: ShopBundle) -> str:
     lines: list[str] = []
-    async for item in ShopBundleItem.objects.filter(bundle=bundle).select_related("ball"):
-        lines.append(f"**{item.quantity}×** {item.ball.country}")
+    async for item in ShopBundleItem.objects.filter(bundle=bundle).select_related("ball", "special"):
+        tag = f" ({item.special.name})" if item.special_id else ""
+        lines.append(f"**{item.quantity}×** {item.ball.country}{tag}")
     reward = ", ".join(lines) if lines else "*no items configured*"
     emoji = bundle.emoji or "🛒"
     desc = f"\n{bundle.description}" if bundle.description else ""
@@ -30,7 +31,7 @@ async def purchase_bundle(player: Player, bundle_id: int, *, guild_id: int | Non
     if not bundle.enabled:
         return False, f"**{bundle.name}** is not available right now."
 
-    items = [item async for item in ShopBundleItem.objects.filter(bundle=bundle).select_related("ball")]
+    items = [item async for item in ShopBundleItem.objects.filter(bundle=bundle).select_related("ball", "special")]
     if not items:
         return False, f"**{bundle.name}** has no rewards configured yet."
 
@@ -44,9 +45,15 @@ async def purchase_bundle(player: Player, bundle_id: int, *, guild_id: int | Non
     for item in items:
         for _ in range(item.quantity):
             await BallInstance.objects.acreate(
-                ball=item.ball, player=player, attack_bonus=0, health_bonus=0, server_id=guild_id
+                ball=item.ball,
+                player=player,
+                attack_bonus=0,
+                health_bonus=0,
+                server_id=guild_id,
+                special=item.special,
             )
-        granted.append(f"**{item.quantity}×** {item.ball.country}")
+        tag = f" ({item.special.name})" if item.special_id else ""
+        granted.append(f"**{item.quantity}×** {item.ball.country}{tag}")
 
     await ShopPurchase.objects.acreate(player=player, bundle=bundle)
     player = await Player.objects.aget(pk=player.pk)

@@ -12,6 +12,7 @@ from fcdex_3_1.fcdex_ext.rarity_logic import (
     balls_at_rarity,
     build_category_overview,
     build_spawnable_overview,
+    build_specials_overview,
     count_catalog,
     fetch_all_balls,
     format_ball_line,
@@ -29,6 +30,7 @@ log = logging.getLogger("fcdex_3_1.rarity.views")
 CATEGORY_MODES: dict[str, RarityCategory] = {
     "spawnable": RarityCategory.SPAWNABLE,
     "unspawnable": RarityCategory.UNSPAWNABLE,
+    "specials": RarityCategory.SPECIALS,
 }
 
 
@@ -42,6 +44,7 @@ def _overview_body(all_balls: list[Ball]) -> str:
         "",
         f"✅ Spawnable · **{counts['spawnable']}** clubballs",
         f"🚫 Unspawnable · **{counts['unspawnable']}** clubballs",
+        "✨ Specials · browse the **Specials** tab",
         f"📈 **{distinct}** distinct spawn weights · rarest spawnable: **r:{rarest}**",
         "",
         "-# Use tabs below · `/fcdex rarity clubball:<card>` · `/fcdex rarity rarity:<value>`",
@@ -67,6 +70,10 @@ class RarityCategoryTabs(ActionRow):
     @button(label="Unspawnable", style=discord.ButtonStyle.secondary, emoji="🚫")
     async def unspawnable_tab(self, interaction: Interaction, button: Button):
         await self._switch(interaction, "unspawnable", 0)
+
+    @button(label="Specials", style=discord.ButtonStyle.secondary, emoji="✨")
+    async def specials_tab(self, interaction: Interaction, button: Button):
+        await self._switch(interaction, "specials", 0)
 
     async def _switch(self, interaction: Interaction, mode: str, page: int) -> None:
         if interaction.user.id != self.owner_id:
@@ -120,6 +127,9 @@ async def build_rarity_menu(owner_id: int, *, mode: str = "overview", page: int 
         if len(pages) > 1:
             container.add_item(Separator())
             container.add_item(RarityPageRow(owner_id, page=page, page_count=len(pages)))
+    elif mode == "specials":
+        body = await build_specials_overview()
+        container.add_item(TextDisplay(truncate_text(body)))
     elif mode in CATEGORY_MODES:
         body = build_category_overview(all_balls, CATEGORY_MODES[mode])
         container.add_item(TextDisplay(truncate_text(body)))

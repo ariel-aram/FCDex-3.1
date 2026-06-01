@@ -222,3 +222,22 @@ def match_log_file(log_lines: list[str]) -> discord.File:
 
 def battle_log_file(log_lines: list[str]) -> discord.File:
     return match_log_file(log_lines)
+
+
+class AdminHubBackRow(ActionRow):
+    """Back navigation for ephemeral admin sub-panels."""
+
+    def __init__(self, owner_id: int, guild_id: int | None):
+        super().__init__()
+        self.owner_id = owner_id
+        self.guild_id = guild_id
+
+    @button(label="← Admin hub", style=discord.ButtonStyle.secondary)
+    async def back(self, interaction: discord.Interaction, button: Button):
+        from fcdex_3_1.fcdex_ext.admin_hub_views import build_admin_hub_layout
+
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("This panel is not yours.", ephemeral=True)
+            return
+        layout = build_admin_hub_layout(self.owner_id, self.guild_id)
+        await interaction.response.edit_message(view=layout)

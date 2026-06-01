@@ -44,6 +44,7 @@ def _load_rarity_logic() -> tuple[_RarityLogicTestModule, dict[str, object | Non
     bd_models_models = ModuleType("bd_models.models")
     bd_models_models.Ball = object
     bd_models_models.balls = {}
+    bd_models_models.Special = object
     bd_models.models = bd_models_models
 
     saved: dict[str, object | None] = {

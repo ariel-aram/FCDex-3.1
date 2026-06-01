@@ -347,6 +347,14 @@ class ShopBundleItem(models.Model):
     ball = models.ForeignKey(Ball, on_delete=models.CASCADE, related_name="shop_bundle_items")
     ball_id: int
     quantity = models.PositiveSmallIntegerField(default=1)
+    special = models.ForeignKey(
+        "bd_models.Special",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Optional special applied to each granted clubball",
+    )
+    special_id: int | None
 
     class Meta:
         ordering = ("pk",)

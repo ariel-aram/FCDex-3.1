@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from bd_models.models import Ball, balls
+from bd_models.models import Ball, Special, balls
 from fcdex_3_1.fcdex_ext.rarity_data import (
     CATEGORY_LABELS,
     RarityBallInfo,
@@ -96,6 +96,22 @@ def build_category_overview(all_balls: list[Ball], category: RarityCategory) -> 
             lines.append(f"\n**r:{rarity}**")
         lines.append(f"• {row.name} · `{row.attack}` ATK · `{row.health}` HP")
     return f"### {CATEGORY_LABELS[category]}\n" + "\n".join(lines).strip()
+
+
+async def build_specials_overview() -> str:
+    rows = [s async for s in Special.objects.order_by("rarity", "name")]
+    if not rows:
+        return "### ✨ Specials\n*No specials in the dex.*"
+    lines = ["### ✨ Specials", "-# Event tags applied to clubballs (merge, boss rewards, shop bundles, etc.)", ""]
+    current_rarity: float | None = None
+    for special in rows:
+        if special.rarity != current_rarity:
+            current_rarity = special.rarity
+            lines.append(f"\n**r:{format_rarity_value(special.rarity)}**")
+        trade = "tradeable" if special.tradeable else "untradeable"
+        hidden = " · hidden" if special.hidden else ""
+        lines.append(f"• {special.emoji} **{special.name}** · {trade}{hidden}")
+    return "\n".join(lines).strip()
 
 
 def count_catalog(all_balls: list[Ball]) -> dict[str, int]:

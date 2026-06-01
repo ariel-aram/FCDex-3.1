@@ -17,11 +17,13 @@ _NORMALIZE_RE = re.compile(r"[^a-z0-9]+")
 class RarityCategory(StrEnum):
     SPAWNABLE = "spawnable"
     UNSPAWNABLE = "unspawnable"
+    SPECIALS = "specials"
 
 
 CATEGORY_LABELS: dict[RarityCategory, str] = {
-    RarityCategory.SPAWNABLE: "✅ Spawnable",
+    RarityCategory.SPAWNABLE: "✅ Spawnable (obtainable)",
     RarityCategory.UNSPAWNABLE: "🚫 Unspawnable",
+    RarityCategory.SPECIALS: "✨ Specials",
 }
 
 

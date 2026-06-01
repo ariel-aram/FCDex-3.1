@@ -69,7 +69,7 @@ async def build_shop_layout(owner_id: int, *, notice: str = "") -> LayoutView:
         container.add_item(row)
     else:
         container.add_item(Separator())
-        container.add_item(TextDisplay("*No bundles in the shop yet — admins can add them with `/fcdex shop-admin`.*"))
+        container.add_item(TextDisplay("*No bundles in the shop yet — admins can add them in `/fcdex admin` → Shop.*"))
 
     layout.add_item(container)
     return layout

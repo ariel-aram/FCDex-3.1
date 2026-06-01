@@ -28,6 +28,13 @@ def _load_bracket():
     models_stub.Tournament = object
     models_stub.TournamentRegistration = object
     models_stub.TournamentStatus = object
+    bd_models = ModuleType("bd_models")
+    bd_models_models = ModuleType("bd_models.models")
+    bd_models_models.Player = object
+    bd_models.models = bd_models_models
+    sys.modules["bd_models"] = bd_models
+    sys.modules["bd_models.models"] = bd_models_models
+    sys.modules.pop("fcdex_3_1.fcdex_ext.tournament_bracket", None)
     sys.modules["fcdex_3_1.models"] = models_stub
 
     path = ROOT / "fcdex_3_1" / "fcdex_ext" / "tournament_bracket.py"
