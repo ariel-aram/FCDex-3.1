@@ -3,8 +3,11 @@ from django.contrib import admin
 from .models import (
     Achievement,
     MergeLog,
+    PackClaim,
     PlayerAchievement,
+    PlayerQuestProgress,
     PlayerStats,
+    SBCRecipe,
     Tournament,
     TournamentBet,
     TournamentMatch,
@@ -110,6 +113,27 @@ class TournamentBetAdmin(admin.ModelAdmin):
     search_fields = ("tournament__name", "match__id", "bettor__discord_id", "picked__discord_id")
     list_display = ("tournament", "match", "bettor", "picked", "amount", "payout", "resolved", "created_at")
     list_filter = ("resolved", "tournament")
+
+
+@admin.register(PackClaim)
+class PackClaimAdmin(admin.ModelAdmin):
+    autocomplete_fields = ("player",)
+    list_display = ("player", "pack_type", "claimed_at")
+    list_filter = ("pack_type",)
+
+
+@admin.register(SBCRecipe)
+class SBCRecipeAdmin(admin.ModelAdmin):
+    autocomplete_fields = ("required_ball", "reward_ball")
+    list_display = ("name", "required_ball", "required_count", "reward_ball", "reward_money", "enabled")
+    list_filter = ("enabled",)
+
+
+@admin.register(PlayerQuestProgress)
+class PlayerQuestProgressAdmin(admin.ModelAdmin):
+    autocomplete_fields = ("player",)
+    list_display = ("player", "quest_key", "day", "progress", "target", "completed_at", "claimed_at")
+    list_filter = ("quest_key", "day")
 
 
 @admin.register(MergeLog)

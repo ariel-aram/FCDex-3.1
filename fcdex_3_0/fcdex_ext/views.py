@@ -58,7 +58,7 @@ class BattleLineupControls(ActionRow):
         super().__init__()
         self.battle = battle
 
-    @button(label="Random", style=discord.ButtonStyle.secondary, emoji="🎲")
+    @button(label="Random 5", style=discord.ButtonStyle.secondary, emoji="🎲")
     async def random_button(self, interaction: discord.Interaction, button: Button):
         from fcdex_3_0.fcdex_ext.battle_cog import apply_lineup_mode, refresh_battle_message
 
@@ -159,7 +159,7 @@ class BattleLayoutView(LayoutView):
             container.add_item(
                 TextDisplay(
                     "### 📋 Match rules\n"
-                    "▸ **Random** — up to 5 random clubballs\n"
+                    "▸ **Random 5** — up to 5 random clubballs (use `/battle random` for instant match)\n"
                     "▸ **Strongest** — your top 5 by ATK + HP\n"
                     "▸ **Clear** — empty your lineup\n"
                     "▸ 30% miss chance · damage varies ±20% from ATK"

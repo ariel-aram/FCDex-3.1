@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fcdex-3-0"
-version = "1.9.6"
-description = "FCDex 3.0 — tournaments, battles, achievements, and merging for BallsDex V3"
+version = "2.0.0"
+description = "FCDex 3.1 — packs, craft/SBC, battles, tournaments, quests, and more for BallsDex V3"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [

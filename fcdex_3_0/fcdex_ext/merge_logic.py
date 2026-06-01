@@ -196,6 +196,9 @@ async def execute_merge(
         source_ids=instance_ids,
     )
     await increment_stat(player, "merges_completed")
+    from fcdex_3_0.fcdex_ext.quest_logic import bump_quest
+
+    await bump_quest(player, "merge_once")
 
     with ThreadPoolExecutor() as pool:
         buffer = await bot.loop.run_in_executor(pool, new_instance.draw_card)

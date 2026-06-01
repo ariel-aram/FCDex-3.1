@@ -36,10 +36,7 @@ def profile_from_user(user: discord.User | discord.Member) -> LeaderboardProfile
 
 
 async def resolve_leaderboard_profiles(
-    client: discord.Client,
-    discord_ids: list[int],
-    *,
-    guild: discord.Guild | None = None,
+    client: discord.Client, discord_ids: list[int], *, guild: discord.Guild | None = None
 ) -> dict[int, LeaderboardProfile]:
     """Resolve display names and avatars without mention strings."""
     unique_ids = list(dict.fromkeys(discord_ids))

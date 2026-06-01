@@ -11,8 +11,10 @@ from discord.ext import commands
 
 from ballsdex.core.utils.transformers import BallInstanceTransform
 from bd_models.models import BallInstance, Player
+from fcdex_3_0.fcdex_ext.battle_all import run_full_roster_battle, summarize_battle
 from fcdex_3_0.fcdex_ext.battle_engine import BattleBall, BattleInstance, gen_battle
 from fcdex_3_0.fcdex_ext.bd_helpers import format_instance, get_ball, instance_attack, instance_health
+from fcdex_3_0.fcdex_ext.quest_logic import bump_quest
 from fcdex_3_0.fcdex_ext.services import increment_stat
 from fcdex_3_0.fcdex_ext.views import BattleLayoutView, battle_log_file, build_battle_result_layout
 from settings.models import settings
@@ -129,6 +131,8 @@ class ActiveBattle:
             await increment_stat(winner_player, "battles_won")
             await increment_stat(winner_player, "battles_played")
             await increment_stat(loser_player, "battles_played")
+            await bump_quest(winner_player, "battle_play")
+            await bump_quest(loser_player, "battle_play")
 
             if self.tournament_match_id is not None:
                 from fcdex_3_0.fcdex_ext.tournament_match import apply_verified_battle_result
@@ -329,3 +333,86 @@ class BattleCog(commands.GroupCog, group_name="battle"):
             await interaction.response.send_message(f"Removed `{await format_instance(clubball)}`.", ephemeral=True)
 
         await refresh_battle_message(battle)
+
+    @app_commands.command(name="random", description="Instant 5v5 battle with random lineups (no match panel)")
+    async def battle_random(self, interaction: discord.Interaction, opponent: discord.Member):
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message("Battles can only be started in a server.", ephemeral=True)
+            return
+        if opponent.bot or opponent.id == interaction.user.id:
+            await interaction.response.send_message("Pick a valid opponent.", ephemeral=True)
+            return
+        if fetch_battle(interaction.user) or fetch_battle(opponent):
+            await interaction.response.send_message("One of you is already in a match.", ephemeral=True)
+            return
+        await _run_quick_battle(interaction, self.bot, interaction.user, opponent, cap=5, skip_commentary=False)
+
+    @app_commands.command(name="all", description="Battle using every clubball you own (optional skip commentary)")
+    @app_commands.describe(opponent="Player to battle", skip_commentary="Only show the winner summary")
+    async def battle_all(
+        self, interaction: discord.Interaction, opponent: discord.Member, skip_commentary: bool = False
+    ):
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message("Battles can only be started in a server.", ephemeral=True)
+            return
+        if opponent.bot or opponent.id == interaction.user.id:
+            await interaction.response.send_message("Pick a valid opponent.", ephemeral=True)
+            return
+        if fetch_battle(interaction.user) or fetch_battle(opponent):
+            await interaction.response.send_message("One of you is already in a match.", ephemeral=True)
+            return
+        await _run_quick_battle(
+            interaction, self.bot, interaction.user, opponent, cap=None, skip_commentary=skip_commentary
+        )
+
+
+async def _instances_for_player(player: Player) -> list[BallInstance]:
+    return [x async for x in BallInstance.objects.filter(player=player, deleted=False)]
+
+
+async def _deck_from_instances(
+    instances: list[BallInstance], owner_name: str, bot: BallsDexBot, *, cap: int | None = 5
+) -> list[BattleBall]:
+    pool = instances if cap is None else random.sample(instances, min(cap, len(instances))) if instances else []
+    balls_out: list[BattleBall] = []
+    for inst in pool:
+        balls_out.append(await ball_instance_to_battle_ball(inst, owner_name, bot))
+    return balls_out
+
+
+async def _run_quick_battle(
+    interaction: discord.Interaction,
+    bot: BallsDexBot,
+    author: discord.Member,
+    opponent: discord.Member,
+    *,
+    cap: int | None,
+    skip_commentary: bool,
+) -> None:
+    author_player, _ = await Player.objects.aget_or_create(discord_id=author.id)
+    opponent_player, _ = await Player.objects.aget_or_create(discord_id=opponent.id)
+    a_inst = await _instances_for_player(author_player)
+    o_inst = await _instances_for_player(opponent_player)
+    if not a_inst or not o_inst:
+        await interaction.response.send_message(
+            f"Both players need at least one {settings.collectible_name}.", ephemeral=True
+        )
+        return
+
+    p1 = await _deck_from_instances(a_inst, author.display_name, bot, cap=cap)
+    p2 = await _deck_from_instances(o_inst, opponent.display_name, bot, cap=cap)
+    instance, log = run_full_roster_battle(p1, p2)
+    summary = summarize_battle(instance, log, skip_commentary=skip_commentary)
+
+    await increment_stat(author_player, "battles_played")
+    await increment_stat(opponent_player, "battles_played")
+    await bump_quest(author_player, "battle_play")
+    await bump_quest(opponent_player, "battle_play")
+
+    winner_name = instance.winner
+    if winner_name == author.display_name:
+        await increment_stat(author_player, "battles_won")
+    elif winner_name == opponent.display_name:
+        await increment_stat(opponent_player, "battles_won")
+
+    await interaction.response.send_message(summary)

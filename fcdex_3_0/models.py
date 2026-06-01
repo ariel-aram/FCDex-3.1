@@ -43,8 +43,8 @@ class PlayerStats(models.Model):
     tournament_participations = models.PositiveIntegerField(default=0)
 
     class Meta:
-        verbose_name = "FCDex player stats"
-        verbose_name_plural = "FCDex player stats"
+        verbose_name = "FCDex 3.1 player stats"
+        verbose_name_plural = "FCDex 3.1 player stats"
 
     def __str__(self) -> str:
         return f"Stats for player #{self.player_id}"
@@ -264,3 +264,61 @@ class MergeLog(models.Model):
 
     def __str__(self) -> str:
         return f"Merge #{self.pk} by player {self.player_id}"
+
+
+class PackType(models.TextChoices):
+    DAILY = "daily", "Daily Pack"
+    WEEKLY = "weekly", "Weekly Pack"
+    MASCOT = "mascot", "Mascot Pack"
+
+
+class PackClaim(models.Model):
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="pack_claims")
+    player_id: int
+    pack_type = models.CharField(max_length=16, choices=PackType.choices)
+    claimed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-claimed_at",)
+        indexes = [models.Index(fields=("player", "pack_type", "-claimed_at"))]
+
+    def __str__(self) -> str:
+        return f"{self.player_id} · {self.pack_type}"
+
+
+class SBCRecipe(models.Model):
+    name = models.CharField(max_length=64, unique=True)
+    description = models.TextField(blank=True, default="")
+    required_ball = models.ForeignKey(Ball, on_delete=models.CASCADE, related_name="sbc_requirements")
+    required_ball_id: int
+    required_count = models.PositiveSmallIntegerField(default=1)
+    reward_ball = models.ForeignKey(Ball, on_delete=models.CASCADE, related_name="sbc_rewards")
+    reward_ball_id: int
+    reward_money = models.PositiveIntegerField(default=0)
+    enabled = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "SBC recipe"
+        verbose_name_plural = "SBC recipes"
+        ordering = ("name",)
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class PlayerQuestProgress(models.Model):
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="fcdex_quests")
+    player_id: int
+    quest_key = models.CharField(max_length=32)
+    progress = models.PositiveIntegerField(default=0)
+    target = models.PositiveIntegerField(default=1)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    day = models.DateField()
+
+    class Meta:
+        unique_together = ("player", "quest_key", "day")
+        ordering = ("-day", "quest_key")
+
+    def __str__(self) -> str:
+        return f"{self.player_id} · {self.quest_key} · {self.day}"
