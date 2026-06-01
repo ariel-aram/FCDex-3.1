@@ -23,7 +23,6 @@ class CreateSBCModal(Modal, title="New SBC recipe"):
     required_count = TextInput(label="Required count", default="1", max_length=3)
     reward_ball = TextInput(label="Reward clubball (country name)", max_length=128)
     reward_money = TextInput(label="Bonus coins (optional)", required=False, default="0", max_length=12)
-    description = TextInput(label="Description (optional)", required=False, style=discord.TextStyle.paragraph)
 
     def __init__(self, owner_id: int):
         super().__init__()
@@ -52,7 +51,7 @@ class CreateSBCModal(Modal, title="New SBC recipe"):
             return
         await SBCRecipe.objects.acreate(
             name=name,
-            description=self.description.value or "",
+            description="",
             required_ball=req_ball,
             required_count=req_count,
             reward_ball=rew_ball,

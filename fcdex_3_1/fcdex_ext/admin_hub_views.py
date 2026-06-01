@@ -7,6 +7,7 @@ from discord.ui import ActionRow, Button, Container, Modal, Separator, TextDispl
 
 from ballsdex.core.discord import LayoutView
 from bd_models.models import Ball
+from fcdex_3_1.fcdex_ext.bd_resolve import resolve_ball_for_lookup
 from fcdex_3_1.fcdex_ext.boss_views import build_boss_admin_layout
 from fcdex_3_1.fcdex_ext.craft_admin_views import build_craft_admin_layout
 from fcdex_3_1.fcdex_ext.shop_admin_views import build_shop_admin_layout
@@ -44,8 +45,9 @@ class AdminHubControls(ActionRow):
     async def owners(self, interaction: Interaction, button: Button):
         await interaction.response.send_modal(OwnersLookupModal(self.owner_id, self.guild_id))
 
+
 class OwnersLookupModal(Modal, title="Clubball owners"):
-    clubball = TextInput(label="Clubball name (country)", max_length=128)
+    clubball = TextInput(label="Clubball", placeholder="Country name or PK (e.g. 42)", max_length=128)
 
     def __init__(self, owner_id: int, guild_id: int | None):
         super().__init__()
@@ -53,9 +55,7 @@ class OwnersLookupModal(Modal, title="Clubball owners"):
         self.guild_id = guild_id
 
     async def on_submit(self, interaction: Interaction) -> None:
-        ball = await Ball.objects.filter(country__iexact=self.clubball.value.strip(), enabled=True).afirst()
-        if ball is None:
-            ball = await Ball.objects.filter(country__iexact=self.clubball.value.strip()).afirst()
+        ball = await resolve_ball_for_lookup(self.clubball.value)
         if ball is None:
             await interaction.response.send_message("Clubball not found.", ephemeral=True)
             return
@@ -91,9 +91,7 @@ async def open_owners_panel(interaction: Interaction, clubball: Ball) -> None:
         return
     lines: list[str] = []
     async for inst in (
-        BallInstance.objects.filter(ball_id=clubball.pk, deleted=False)
-        .select_related("player")
-        .order_by("-pk")[:25]
+        BallInstance.objects.filter(ball_id=clubball.pk, deleted=False).select_related("player").order_by("-pk")[:25]
     ):
         lines.append(f"• <@{inst.player.discord_id}> · card `#{inst.pk}`")
     extra = f"-# Showing 25/{count} owners." if count > 25 else ""

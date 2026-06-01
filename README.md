@@ -60,13 +60,12 @@ Legacy & Main groups · grand final is **Legacy vs Main** semifinal winners.
 - **Rarity** — spawnable, unspawnable, and **specials** (`/fcdex rarity`)
 - **Leaderboard** — server vs global (`/fcdex leaderboard`)
 
-### 📋 List regime · 👑 Boss · ✨ Shiny · 📜 Quests
+### 📋 List regime · 👑 Boss · 📜 Quests
 
 | Command | Description |
 | ------- | ----------- |
 | `/fcdex list regime:<key>` | Clubballs by regime (UCL, Premier League, etc.) |
 | `/fcdex boss` | Guild boss raid — join, pick clubballs, track damage (ephemeral panel) |
-| `/fcdex shiny clubball:<card>` | 2 copies → 1 shiny (+25% ATK/HP) |
 | `/fcdex quests` | Daily quest progress |
 | `/fcdex quest claim:<key>` | Claim quest coins |
 

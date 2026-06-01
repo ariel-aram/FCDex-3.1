@@ -20,8 +20,7 @@ if not settings.configured:
 def _load_bracket():
     models_stub = ModuleType("fcdex_3_1.models")
     models_stub.TournamentGroup = SimpleNamespace(
-        LEGACY=SimpleNamespace(value="legacy"),
-        MAIN=SimpleNamespace(value="main"),
+        LEGACY=SimpleNamespace(value="legacy"), MAIN=SimpleNamespace(value="main")
     )
     models_stub.TournamentRound = SimpleNamespace(SEMIFINAL="semifinal", FINAL="final")
     models_stub.TournamentMatch = object
@@ -54,10 +53,7 @@ def test_create_final_pairing_legacy_vs_main() -> None:
     semi_filter = MagicMock()
     semi_filter.select_related.return_value = semi_filter
     semi_filter.afirst = AsyncMock(
-        side_effect=[
-            SimpleNamespace(winner=legacy_player),
-            SimpleNamespace(winner=main_player),
-        ]
+        side_effect=[SimpleNamespace(winner=legacy_player), SimpleNamespace(winner=main_player)]
     )
 
     final_filter = MagicMock()

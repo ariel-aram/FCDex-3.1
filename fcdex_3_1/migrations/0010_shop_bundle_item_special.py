@@ -2,10 +2,7 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [
-        ("fcdex_3_0", "0009_shop_bundles"),
-        ("bd_models", "0015_alter_ballinstance_server_id_and_more"),
-    ]
+    dependencies = [("fcdex_3_0", "0009_shop_bundles"), ("bd_models", "0015_alter_ballinstance_server_id_and_more")]
 
     operations = [
         migrations.AddField(
@@ -18,5 +15,5 @@ class Migration(migrations.Migration):
                 on_delete=models.SET_NULL,
                 to="bd_models.special",
             ),
-        ),
+        )
     ]
