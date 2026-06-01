@@ -11,6 +11,31 @@ from django.conf import settings
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _install_bd_models_stub() -> None:
+    if "bd_models.models" in sys.modules:
+        return
+    models = ModuleType("bd_models.models")
+
+    class _DoesNotExist(Exception):
+        pass
+
+    class _DummyModel:
+        DoesNotExist = _DoesNotExist
+        objects = SimpleNamespace()
+
+    for name in ("Ball", "BallInstance", "Player", "Special"):
+        setattr(models, name, type(name, (_DummyModel,), {"DoesNotExist": _DoesNotExist}))
+
+    models.balls = {}
+    pkg = ModuleType("bd_models")
+    pkg.models = models
+    sys.modules["bd_models"] = pkg
+    sys.modules["bd_models.models"] = models
+
+
+_install_bd_models_stub()
+
+
 class _TournamentStatus:
     REGISTRATION = "registration"
     GROUP_STAGE = "group_stage"

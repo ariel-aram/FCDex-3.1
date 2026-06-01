@@ -7,7 +7,8 @@ import discord
 from discord.ui import ActionRow, Button, Container, Modal, Separator, TextDisplay, TextInput, button
 
 from ballsdex.core.discord import LayoutView
-from bd_models.models import Ball, Special
+from bd_models.models import Special
+from fcdex_3_1.fcdex_ext.bd_resolve import resolve_ball_input
 from fcdex_3_1.fcdex_ext.shop_logic import format_bundle_line_async, list_shop_bundles
 from fcdex_3_1.fcdex_ext.views import AdminHubBackRow, truncate_text
 from fcdex_3_1.models import ShopBundle, ShopBundleItem
@@ -44,20 +45,15 @@ class CreateBundleModal(Modal, title="New shop bundle"):
             await interaction.response.send_message(f"A bundle named **{name}** already exists.", ephemeral=True)
             return
         bundle = await ShopBundle.objects.acreate(
-            name=name,
-            price=price,
-            description=self.description.value or "",
-            emoji=(self.emoji.value or "🛒")[:32],
+            name=name, price=price, description=self.description.value or "", emoji=(self.emoji.value or "🛒")[:32]
         )
-        layout = await build_shop_admin_layout(
-            self.owner_id, notice=f"Created **{bundle.name}** (`#{bundle.pk}`)."
-        )
+        layout = await build_shop_admin_layout(self.owner_id, notice=f"Created **{bundle.name}** (`#{bundle.pk}`).")
         await interaction.response.edit_message(view=layout)
 
 
 class AddBundleItemModal(Modal, title="Add clubball to bundle"):
     bundle_name = TextInput(label="Bundle name", max_length=64)
-    clubball_name = TextInput(label="Clubball name (dex country)", max_length=128)
+    clubball_name = TextInput(label="Clubball", placeholder="Country name or PK (e.g. 42)", max_length=128)
     quantity = TextInput(label="Quantity", placeholder="1", max_length=3, default="1")
     special_name = TextInput(
         label="Special name (optional)",
@@ -86,7 +82,7 @@ class AddBundleItemModal(Modal, title="Add clubball to bundle"):
         except ShopBundle.DoesNotExist:
             await interaction.response.send_message("Bundle not found.", ephemeral=True)
             return
-        ball = await Ball.objects.filter(country__iexact=self.clubball_name.value.strip()).afirst()
+        ball = await resolve_ball_input(self.clubball_name.value)
         if ball is None:
             await interaction.response.send_message("Clubball not found in the dex.", ephemeral=True)
             return

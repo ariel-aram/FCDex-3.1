@@ -45,12 +45,7 @@ async def purchase_bundle(player: Player, bundle_id: int, *, guild_id: int | Non
     for item in items:
         for _ in range(item.quantity):
             await BallInstance.objects.acreate(
-                ball=item.ball,
-                player=player,
-                attack_bonus=0,
-                health_bonus=0,
-                server_id=guild_id,
-                special=item.special,
+                ball=item.ball, player=player, attack_bonus=0, health_bonus=0, server_id=guild_id, special=item.special
             )
         tag = f" ({item.special.name})" if item.special_id else ""
         granted.append(f"**{item.quantity}×** {item.ball.country}{tag}")

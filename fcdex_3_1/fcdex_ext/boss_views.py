@@ -114,8 +114,9 @@ class BossPlayerCardSelect(discord.ui.Select):
         if interaction.user.id != self.owner_id:
             await interaction.response.send_message("This menu is private to you.", ephemeral=True)
             return
-        inst = await BallInstance.objects.select_related("ball").aget(pk=int(self.values[0]))
-        if inst.player.discord_id != interaction.user.id:
+        inst = await BallInstance.objects.select_related("ball", "player").aget(pk=int(self.values[0]))
+        player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
+        if inst.player_id != player.pk:
             await interaction.response.send_message("That card is not yours.", ephemeral=True)
             return
         ok, message = await boss_raid.submit_card(raid, interaction.user.id, inst)
@@ -215,7 +216,7 @@ async def build_boss_player_layout(user_id: int, guild_id: int, *, notice: str =
             instances = [
                 i
                 async for i in BallInstance.objects.filter(player=player, deleted=False)
-                .select_related("ball")
+                .select_related("ball", "player")
                 .order_by("-pk")[:25]
                 if i.pk not in raid.used_instance_ids
             ]

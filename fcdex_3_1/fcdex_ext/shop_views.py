@@ -26,10 +26,7 @@ class ShopBundleSelect(Select):
             desc = f"{bundle.price:,} coins"[:100]
             options.append(
                 discord.SelectOption(
-                    label=bundle.name[:100],
-                    value=str(bundle.pk),
-                    description=desc,
-                    emoji=bundle.emoji or None,
+                    label=bundle.name[:100], value=str(bundle.pk), description=desc, emoji=bundle.emoji or None
                 )
             )
         super().__init__(placeholder="Choose a bundle to buy…", options=options, min_values=1, max_values=1)

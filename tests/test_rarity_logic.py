@@ -27,14 +27,7 @@ class _RarityLogicTestModule:
 
 
 def _ball(**kwargs) -> SimpleNamespace:
-    defaults = {
-        "pk": 1,
-        "country": "Test Club",
-        "rarity": 10.0,
-        "enabled": True,
-        "attack": 100,
-        "health": 80,
-    }
+    defaults = {"pk": 1, "country": "Test Club", "rarity": 10.0, "enabled": True, "attack": 100, "health": 80}
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 
@@ -48,8 +41,7 @@ def _load_rarity_logic() -> tuple[_RarityLogicTestModule, dict[str, object | Non
     bd_models.models = bd_models_models
 
     saved: dict[str, object | None] = {
-        name: sys.modules.get(name)
-        for name in ("bd_models", "bd_models.models", "fcdex_3_1.fcdex_ext.rarity_logic")
+        name: sys.modules.get(name) for name in ("bd_models", "bd_models.models", "fcdex_3_1.fcdex_ext.rarity_logic")
     }
     sys.modules["bd_models"] = bd_models
     sys.modules["bd_models.models"] = bd_models_models
@@ -92,8 +84,7 @@ def test_rarity_logic_grouping_and_lookup():
     logic, saved = _load_rarity_logic()
     try:
         rows = logic.balls_for_category(
-            [_ball(country="A", enabled=True), _ball(pk=2, country="B", enabled=False)],
-            RarityCategory.SPAWNABLE,
+            [_ball(country="A", enabled=True), _ball(pk=2, country="B", enabled=False)], RarityCategory.SPAWNABLE
         )
         assert [row.name for row in rows] == ["A"]
 

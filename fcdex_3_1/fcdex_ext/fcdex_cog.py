@@ -6,7 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from ballsdex.core.utils.transformers import BallEnabledTransform, BallInstanceTransform
+from ballsdex.core.utils.transformers import BallEnabledTransform
 from bd_models.models import Ball, Player, balls
 from fcdex_3_1.fcdex_ext.admin_hub_views import build_admin_hub_layout
 from fcdex_3_1.fcdex_ext.boss_views import build_boss_player_layout
@@ -25,7 +25,6 @@ from fcdex_3_1.fcdex_ext.rarity_views import (
     build_rarity_value_layout,
 )
 from fcdex_3_1.fcdex_ext.regime_data import REGIMES, regime_by_key
-from fcdex_3_1.fcdex_ext.shiny_logic import ShinyError, convert_to_shiny
 from fcdex_3_1.fcdex_ext.shop_views import build_shop_layout
 from fcdex_3_1.fcdex_ext.views import build_panel_layout
 
@@ -55,8 +54,7 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
                 "### ✨ Merge · 🏅 Achievements · 📊 Rarity · 🏆 Leaderboard",
                 "### 📋 List regime\n`/fcdex list regime:<name>` — browse clubballs by regime",
                 "### 🛒 Shop\n`/fcdex shop` — buy bundles with coins",
-                "### 👑 Boss · ✨ Shiny · 📜 Quests\n"
-                "`/fcdex boss` — guild raid · `/fcdex shiny` · `/fcdex quests` · `/fcdex quest claim`",
+                "### 👑 Boss · 📜 Quests\n`/fcdex boss` — guild raid · `/fcdex quests` · `/fcdex quest claim`",
                 "### 🛡️ Admin\n`/fcdex admin` — shop, craft, boss & owners (Manage Server · ephemeral)",
             ],
             footer="-# Configure SBCs, achievements & tournaments in admin · FCDex 3.1",
@@ -122,19 +120,6 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
             return
         layout = await build_boss_player_layout(interaction.user.id, interaction.guild.id)
         await interaction.response.send_message(view=layout, ephemeral=True)  # pyright: ignore[reportArgumentType]
-
-    @app_commands.command(name="shiny", description="Convert 2 copies into one shiny (+25% ATK/HP)")
-    @app_commands.describe(clubball="A copy of the clubball you want to make shiny")
-    async def shiny(self, interaction: discord.Interaction, clubball: BallInstanceTransform):
-        player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
-        guild_id = interaction.guild_id if interaction.guild else None
-        try:
-            message = await convert_to_shiny(player, clubball, guild_id=guild_id)
-        except ShinyError as exc:
-            await interaction.response.send_message(exc.message, ephemeral=True)
-            return
-        layout = build_panel_layout(title="FCDex 3.1 · Shiny forge", sections=[message])
-        await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]
 
     @app_commands.command(name="quests", description="Daily quest progress")
     async def quests(self, interaction: discord.Interaction):

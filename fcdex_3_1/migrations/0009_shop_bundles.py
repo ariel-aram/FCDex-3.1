@@ -42,9 +42,7 @@ class Migration(migrations.Migration):
                 (
                     "bundle",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE,
-                        related_name="items",
-                        to="fcdex_3_0.shopbundle",
+                        on_delete=django.db.models.deletion.CASCADE, related_name="items", to="fcdex_3_0.shopbundle"
                     ),
                 ),
             ],
@@ -58,9 +56,7 @@ class Migration(migrations.Migration):
                 (
                     "bundle",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE,
-                        related_name="purchases",
-                        to="fcdex_3_0.shopbundle",
+                        on_delete=django.db.models.deletion.CASCADE, related_name="purchases", to="fcdex_3_0.shopbundle"
                     ),
                 ),
                 (
