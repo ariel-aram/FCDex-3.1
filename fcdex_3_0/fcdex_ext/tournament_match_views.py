@@ -85,7 +85,10 @@ async def build_seeding_sections(tournament: Tournament) -> list[str]:
             f"`Seed {seed:02d}` <@{reg.player.discord_id}> · **{group.label}**" for seed, reg in enumerate(regs, 1)
         ]
         if tournament.status == TournamentStatus.REGISTRATION:
-            hint = "-# Pairings generate when the host **starts the group stage** via `/tournament manage`."
+            hint = (
+                "-# Pairings appear when an admin **starts the group stage** "
+                "(`/tournament start` or **Start group stage** in `/tournament match`)."
+            )
         else:
             hint = "-# Group stage not started yet — waiting on the host."
         sections.append(f"### 🛡️ {group.label} · Seeding\n" + "\n".join(lines) + f"\n{hint}")
@@ -171,10 +174,9 @@ class MatchPickSelect(discord.ui.Select):
             placeholder="Select a match…",
             options=[
                 discord.SelectOption(
-                    label=(
-                        f"#{m.pk} · {_group_label(m.group)} · "
-                        + ("claim" if m.verified_winner_id else "battle")
-                    )[:100],
+                    label=(f"#{m.pk} · {_group_label(m.group)} · " + ("claim" if m.verified_winner_id else "battle"))[
+                        :100
+                    ],
                     value=str(m.pk),
                 )
                 for m in matches[:25]
@@ -266,7 +268,16 @@ class TournamentMatchClaimRow(ActionRow):
 
 
 class TournamentMatchMenuLayout(LayoutView):
-    def __init__(self, owner_id: int, tournament_id: int, *, pending: list[TournamentMatch], header: str, body: str):
+    def __init__(
+        self,
+        owner_id: int,
+        tournament_id: int,
+        *,
+        pending: list[TournamentMatch],
+        header: str,
+        body: str,
+        show_host_start: bool = False,
+    ):
         super().__init__(timeout=300)
         self.owner_id = owner_id
         self.tournament_id = tournament_id
@@ -275,6 +286,17 @@ class TournamentMatchMenuLayout(LayoutView):
 
         container = Container()
         container.add_item(TextDisplay(truncate_text(f"{header}\n\n{body}")))
+        if show_host_start:
+            container.add_item(Separator())
+            container.add_item(
+                TextDisplay(
+                    "### Start group stage\n"
+                    "-# **Manage Server** required · creates matches for groups with **≥2** players."
+                )
+            )
+            from fcdex_3_0.fcdex_ext.tournament_host import TournamentStartGroupRow
+
+            container.add_item(TournamentStartGroupRow(owner_id, tournament_id, refresh="match"))
         if pending:
             container.add_item(Separator())
             row = ActionRow()
@@ -285,7 +307,9 @@ class TournamentMatchMenuLayout(LayoutView):
         self.add_item(container)
 
 
-async def build_tournament_match_menu(owner_id: int, tournament_id: int, *, notice: str = "") -> LayoutView:
+async def build_tournament_match_menu(
+    owner_id: int, tournament_id: int, *, notice: str = "", show_host_start: bool = False
+) -> LayoutView:
     tournament = await Tournament.objects.aget(pk=tournament_id)
     player, _ = await Player.objects.aget_or_create(discord_id=owner_id)
     body, pending = await build_match_hub_body(tournament, player)
@@ -298,4 +322,6 @@ async def build_tournament_match_menu(owner_id: int, tournament_id: int, *, noti
         f"match **#** on Bracket tab for `/tournament bet`"
     )
 
-    return TournamentMatchMenuLayout(owner_id, tournament_id, pending=pending, header=header, body=body)
+    return TournamentMatchMenuLayout(
+        owner_id, tournament_id, pending=pending, header=header, body=body, show_host_start=show_host_start
+    )

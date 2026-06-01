@@ -14,9 +14,10 @@ from bd_models.models import Player
 from fcdex_3_0.fcdex_ext.services import increment_stat
 from fcdex_3_0.fcdex_ext.tournament_bets import place_bet
 from fcdex_3_0.fcdex_ext.tournament_bracket import create_semifinal_pairings, sync_bracket_for_status
+from fcdex_3_0.fcdex_ext.tournament_host import tournament_start_eligibility, viewer_can_start_group_stage
 from fcdex_3_0.fcdex_ext.tournament_match_views import build_tournament_match_menu
 from fcdex_3_0.fcdex_ext.tournament_player_views import build_tournament_player_menu
-from fcdex_3_0.fcdex_ext.tournament_schedule import past_end_reason, start_blocked_reason
+from fcdex_3_0.fcdex_ext.tournament_schedule import past_end_reason
 from fcdex_3_0.fcdex_ext.tournament_views import TournamentManageView
 from fcdex_3_0.models import (
     Tournament,
@@ -64,8 +65,34 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
 
     @app_commands.command(name="view", description="Tournament hub — overview, standings, bracket, and join")
     async def view(self, interaction: discord.Interaction, tournament: TournamentTransform):
-        layout = await build_tournament_player_menu(interaction.user.id, tournament.pk, mode="overview")
+        show_start = await viewer_can_start_group_stage(interaction, tournament)
+        layout = await build_tournament_player_menu(
+            interaction.user.id, tournament.pk, mode="overview", show_host_start=show_start
+        )
         await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]
+
+    @app_commands.command(name="start", description="Open group stage — create round-robin matches (Manage Server)")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def start(self, interaction: discord.Interaction, tournament: TournamentTransform):
+        eligible, reason = await tournament_start_eligibility(tournament)
+        if not eligible:
+            await interaction.response.send_message(reason or "Cannot start this tournament.", ephemeral=True)
+            return
+        if error := await run_tournament_start(tournament):
+            await interaction.response.send_message(error, ephemeral=True)
+            return
+        from fcdex_3_0.fcdex_ext.tournament_host import registration_counts_by_group
+        from fcdex_3_0.fcdex_ext.tournament_pairings import planned_group_stage_match_count
+
+        counts = await registration_counts_by_group(tournament)
+        match_count = planned_group_stage_match_count(
+            counts[TournamentGroup.LEGACY.value], counts[TournamentGroup.MAIN.value]
+        )
+        await interaction.response.send_message(
+            f"▶ **{tournament.name}** group stage started — **{match_count}** match(es) created.\n"
+            "-# Players use `/tournament match` → **Start battle**.",
+            ephemeral=True,
+        )
 
     @app_commands.command(name="match", description="View pending matches and claim victory rewards")
     async def match(self, interaction: discord.Interaction, tournament: TournamentTransform):
@@ -77,7 +104,8 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
                 "You must join this tournament first — use `/tournament view`.", ephemeral=True
             )
             return
-        layout = await build_tournament_match_menu(interaction.user.id, tournament.pk)
+        show_start = await viewer_can_start_group_stage(interaction, tournament)
+        layout = await build_tournament_match_menu(interaction.user.id, tournament.pk, show_host_start=show_start)
         await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]
 
     @app_commands.command(name="bet", description="Wager coins on who wins a tournament match")
@@ -107,18 +135,11 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
 
 
 async def run_tournament_start(tournament: Tournament) -> str | None:
-    if tournament.status != TournamentStatus.REGISTRATION:
-        return "This tournament has already started."
-    if reason := start_blocked_reason(tournament):
+    eligible, reason = await tournament_start_eligibility(tournament)
+    if not eligible:
         return reason
-    count = await TournamentRegistration.objects.filter(tournament=tournament).acount()
-    if count < 2:
-        return "Need at least 2 players to start."
 
-    tournament.status = TournamentStatus.GROUP_STAGE
-    tournament.started_at = timezone.now()
-    await tournament.asave(update_fields=("status", "started_at"))
-
+    pairings: list[tuple[str, Player, Player]] = []
     for group in TournamentGroup:
         players = [
             reg.player
@@ -126,10 +147,22 @@ async def run_tournament_start(tournament: Tournament) -> str | None:
                 tournament=tournament, group=group.value
             ).select_related("player")
         ]
+        if len(players) < 2:
+            continue
         for p1, p2 in itertools.combinations(players, 2):
-            await TournamentMatch.objects.acreate(
-                tournament=tournament, round=TournamentRound.GROUP, group=group.value, player1=p1, player2=p2
-            )
+            pairings.append((group.value, p1, p2))
+
+    if not pairings:
+        return "Need at least 2 players in the same group (Legacy or Main) to create matches."
+
+    tournament.status = TournamentStatus.GROUP_STAGE
+    tournament.started_at = timezone.now()
+    await tournament.asave(update_fields=("status", "started_at"))
+
+    for group_value, p1, p2 in pairings:
+        await TournamentMatch.objects.acreate(
+            tournament=tournament, round=TournamentRound.GROUP, group=group_value, player1=p1, player2=p2
+        )
     return None
 
 

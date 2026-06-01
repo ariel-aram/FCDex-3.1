@@ -46,10 +46,7 @@ async def create_semifinal_pairings(tournament: Tournament) -> int:
 async def semifinal_winner_for_group(tournament: Tournament, group: str) -> Player | None:
     match = (
         await TournamentMatch.objects.filter(
-            tournament=tournament,
-            round=TournamentRound.SEMIFINAL,
-            group=group,
-            completed=True,
+            tournament=tournament, round=TournamentRound.SEMIFINAL, group=group, completed=True
         )
         .select_related("winner")
         .afirst()
@@ -66,10 +63,7 @@ async def create_final_pairing(tournament: Tournament) -> bool:
     if legacy_winner is None or main_winner is None:
         return False
     await TournamentMatch.objects.acreate(
-        tournament=tournament,
-        round=TournamentRound.FINAL,
-        player1=legacy_winner,
-        player2=main_winner,
+        tournament=tournament, round=TournamentRound.FINAL, player1=legacy_winner, player2=main_winner
     )
     return True
 
@@ -103,9 +97,26 @@ async def explain_no_matches(tournament: Tournament, player: Player) -> str:
         )
 
     if status == TournamentStatus.REGISTRATION:
+        from fcdex_3_0.fcdex_ext.tournament_host import registration_counts_by_group, tournament_start_eligibility
+
+        eligible, blocker = await tournament_start_eligibility(tournament)
+        counts = await registration_counts_by_group(tournament)
+        legacy = counts.get(TournamentGroup.LEGACY.value, 0)
+        main = counts.get(TournamentGroup.MAIN.value, 0)
+        if eligible:
+            host_hint = (
+                "-# Someone with **Manage Server** can tap **Start group stage** below, "
+                "use `/tournament start`, or `/tournament manage` → **Host**."
+            )
+        elif blocker:
+            host_hint = f"-# {blocker}"
+        else:
+            host_hint = "-# Wait for the host to start the group stage."
         return (
-            f"**{tournament.name}** hasn't started yet.\n"
-            "-# Wait for the host to **Start group stage** in `/tournament manage`."
+            f"**{tournament.name}** hasn't started yet "
+            f"(Legacy **{legacy}** · Main **{main}**).\n"
+            f"{host_hint}\n"
+            "-# Matches are round-robin within each group that has **≥2** players."
         )
 
     if status == TournamentStatus.GROUP_STAGE:
@@ -114,8 +125,7 @@ async def explain_no_matches(tournament: Tournament, player: Player) -> str:
         remaining = await list_open_group_matches_in_group(tournament, reg.group)
         if remaining:
             open_lines = [
-                f"**#{m.pk}** · <@{m.player1.discord_id}> **vs** "
-                f"<@{m.player2.discord_id}>"
+                f"**#{m.pk}** · <@{m.player1.discord_id}> **vs** <@{m.player2.discord_id}>"
                 if m.player2
                 else f"**#{m.pk}** · waiting for opponent"
                 for m in remaining

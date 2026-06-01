@@ -21,13 +21,14 @@ Legacy & Main group tournaments with battle-verified matches, bounties, betting,
 
 Points are earned only from verified match wins (**+3** each). Hosts advance rounds once all bracket matches are complete.
 
-Registration stays open until the host **starts group stage** in `/tournament manage` (or scheduled end passes) — a passed scheduled start does not close signup.
+Registration stays open until an admin **starts group stage** (or scheduled end passes) — a passed scheduled start does not close signup. Round-robin matches are created per group that has **≥2** players (Legacy and Main are independent).
 
 | Command | Description |
 | ------- | ----------- |
 | `/tournament manage` | Ephemeral admin hub — create, edit, host, bounty vault, delete, announce |
 | `/tournament view` | Player hub — overview (rules & betting), standings, bracket, join |
-| `/tournament match` | Pending matches — **Start battle**, verify win, claim bounties |
+| `/tournament start` | Open group stage — create matches (Manage Server) |
+| `/tournament match` | Pending matches — **Start battle**, verify win, claim bounties; admins see **Start group stage** while registration is open |
 | `/tournament bet` | Wager coins on a match participant |
 
 ### 📊 Rarity system
@@ -101,7 +102,7 @@ Add to `config/extra.toml` in your BallsDex directory:
 
 ```toml
 [[ballsdex.packages]]
-location = "git+https://github.com/ariel-aram/FCDex-3.0.git@1.9.5"
+location = "git+https://github.com/ariel-aram/FCDex-3.0.git@1.9.6"
 path = "fcdex_3_0"
 enabled = true
 ```

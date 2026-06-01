@@ -102,7 +102,10 @@ def registration_status_label(tournament: Tournament) -> str:
     if not registration_is_open(tournament):
         return registration_closed_reason(tournament) or "🔴 Registration closed"
     if tournament.scheduled_start_at and timezone.now() >= tournament.scheduled_start_at:
-        return "🟢 Registration open · scheduled start passed — host can **Start group stage** in `/tournament manage`"
+        return (
+            "🟢 Registration open · scheduled start passed — use `/tournament start` "
+            "or **Start group stage** in `/tournament view` / `/tournament match`"
+        )
     return "🟢 Registration open"
 
 

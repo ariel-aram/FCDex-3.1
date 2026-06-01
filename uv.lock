@@ -48,7 +48,7 @@ wheels = [
 
 [[package]]
 name = "fcdex-3-0"
-version = "1.9.2"
+version = "1.9.6"
 source = { editable = "." }
 
 [package.optional-dependencies]

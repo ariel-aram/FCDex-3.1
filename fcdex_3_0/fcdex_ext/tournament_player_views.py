@@ -157,8 +157,7 @@ class TournamentLeaveRow(ActionRow):
         tournament = await Tournament.objects.aget(pk=self.tournament_id)
         if not registration_is_open(tournament):
             await interaction.response.send_message(
-                "You can only leave while **registration** is still open "
-                "(before the host starts group stage).",
+                "You can only leave while **registration** is still open (before the host starts group stage).",
                 ephemeral=True,
             )
             return
@@ -214,13 +213,11 @@ async def viewer_can_join(tournament: Tournament, viewer_id: int) -> bool:
 
 
 async def viewer_is_registered(tournament: Tournament, viewer_id: int) -> bool:
-    return await TournamentRegistration.objects.filter(
-        tournament=tournament, player__discord_id=viewer_id
-    ).aexists()
+    return await TournamentRegistration.objects.filter(tournament=tournament, player__discord_id=viewer_id).aexists()
 
 
 async def build_tournament_player_menu(
-    owner_id: int, tournament_id: int, *, mode: str = "overview", notice: str = ""
+    owner_id: int, tournament_id: int, *, mode: str = "overview", notice: str = "", show_host_start: bool = False
 ) -> LayoutView:
     tournament = await Tournament.objects.aget(pk=tournament_id)
     layout = LayoutView(timeout=300)
@@ -247,17 +244,25 @@ async def build_tournament_player_menu(
         container.add_item(Separator())
         container.add_item(TextDisplay("### Join this tournament\nPick **Legacy** or **Main** below."))
         container.add_item(TournamentJoinRow(owner_id, tournament_id))
-    elif mode == "overview" and registration_is_open(tournament) and await viewer_is_registered(
-        tournament, owner_id
-    ):
+    elif mode == "overview" and registration_is_open(tournament) and await viewer_is_registered(tournament, owner_id):
+        container.add_item(Separator())
+        container.add_item(
+            TextDisplay("### Leave tournament\nRegistration is still open — you can leave before group stage starts.")
+        )
+        container.add_item(TournamentLeaveRow(owner_id, tournament_id))
+
+    if mode == "overview" and show_host_start:
         container.add_item(Separator())
         container.add_item(
             TextDisplay(
-                "### Leave tournament\n"
-                "Registration is still open — you can leave before group stage starts."
+                "### Start group stage\n"
+                "-# **Manage Server** required · opens matches for groups with **≥2** players "
+                "(or use `/tournament start`)."
             )
         )
-        container.add_item(TournamentLeaveRow(owner_id, tournament_id))
+        from fcdex_3_0.fcdex_ext.tournament_host import TournamentStartGroupRow
+
+        container.add_item(TournamentStartGroupRow(owner_id, tournament_id, refresh="player"))
 
     container.add_item(Separator())
     container.add_item(TournamentPlayerTabControls(owner_id, tournament_id, mode))

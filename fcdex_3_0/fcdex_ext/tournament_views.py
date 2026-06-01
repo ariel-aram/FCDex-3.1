@@ -15,7 +15,7 @@ from fcdex_3_0.fcdex_ext.tournament_schedule import (
     schedule_summary_lines,
 )
 from fcdex_3_0.fcdex_ext.views import build_tournament_layout, truncate_text
-from fcdex_3_0.models import Tournament, TournamentRegistration, TournamentStatus
+from fcdex_3_0.models import Tournament, TournamentGroup, TournamentStatus
 
 if TYPE_CHECKING:
     from discord import Interaction
@@ -493,7 +493,7 @@ class TournamentHostView(LayoutView):
                 truncate_text(
                     f"# 🎮 Host · **{self.tournament_name}**\n"
                     f"-# Status: `{self.status}`\n\n"
-                    "▸ **Start** — open group stage (registration must be active)\n"
+                    "▸ **Start** — open group stage (≥2 players in a group; also `/tournament start`)\n"
                     "▸ **Advance** — move to semifinals, finals, or complete\n"
                     "▸ **Sync bracket** — repair missing semifinal/final pairings"
                 )
@@ -526,14 +526,19 @@ class TournamentHostControls(ActionRow):
             await _deny_manage_guild(interaction)
             return
         from fcdex_3_0.fcdex_ext.tournament_cog import run_tournament_start
+        from fcdex_3_0.fcdex_ext.tournament_host import registration_counts_by_group
+        from fcdex_3_0.fcdex_ext.tournament_pairings import planned_group_stage_match_count
 
         tournament = await Tournament.objects.aget(pk=self.tournament_id)
         if error := await run_tournament_start(tournament):
             await interaction.response.send_message(error, ephemeral=True)
             return
-        count = await TournamentRegistration.objects.filter(tournament=tournament).acount()
+        counts = await registration_counts_by_group(tournament)
+        match_count = planned_group_stage_match_count(
+            counts[TournamentGroup.LEGACY.value], counts[TournamentGroup.MAIN.value]
+        )
         view = TournamentManageView(
-            self.owner_id, notice=f"▶ **{tournament.name}** group stage started with **{count}** players!"
+            self.owner_id, notice=f"▶ **{tournament.name}** group stage started — **{match_count}** match(es) created."
         )
         await interaction.response.edit_message(view=view)
 
