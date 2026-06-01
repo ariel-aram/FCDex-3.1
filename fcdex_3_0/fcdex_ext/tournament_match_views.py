@@ -120,10 +120,16 @@ async def build_bracket_sections(tournament: Tournament) -> list[str]:
         ]
         if not knockout:
             continue
-        blocks = [
-            f"**{round_title}{' · `' + _group_label(m.group) + '`' if m.group else ''}**\n{format_match_line(m)}"
-            for m in knockout
-        ]
+        blocks: list[str] = []
+        for m in knockout:
+            if round_value == TournamentRound.FINAL:
+                tag = "**Legacy** vs **Main**"
+            elif m.group:
+                tag = f"`{_group_label(m.group)}`"
+            else:
+                tag = ""
+            prefix = f"**{round_title}** · {tag}\n" if tag else f"**{round_title}**\n"
+            blocks.append(prefix + format_match_line(m))
         sections.append(f"### 🗂️ {round_title}\n\n" + "\n\n".join(blocks))
 
     return sections or await build_seeding_sections(tournament)

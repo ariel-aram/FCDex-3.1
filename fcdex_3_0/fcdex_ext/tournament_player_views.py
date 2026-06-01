@@ -142,6 +142,42 @@ class TournamentJoinRow(ActionRow):
         self.add_item(TournamentJoinSelect(owner_id, tournament_id))
 
 
+class TournamentLeaveRow(ActionRow):
+    def __init__(self, owner_id: int, tournament_id: int):
+        super().__init__()
+        self.owner_id = owner_id
+        self.tournament_id = tournament_id
+
+    @button(label="Leave tournament", style=discord.ButtonStyle.danger, emoji="🚪")
+    async def leave_button(self, interaction: Interaction, button: Button) -> None:
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("This menu is for the player who opened it.", ephemeral=True)
+            return
+
+        tournament = await Tournament.objects.aget(pk=self.tournament_id)
+        if not registration_is_open(tournament):
+            await interaction.response.send_message(
+                "You can only leave while **registration** is still open "
+                "(before the host starts group stage).",
+                ephemeral=True,
+            )
+            return
+
+        player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
+        deleted, _ = await TournamentRegistration.objects.filter(tournament=tournament, player=player).adelete()
+        if not deleted:
+            await interaction.response.send_message("You aren't registered in this tournament.", ephemeral=True)
+            return
+
+        layout = await build_tournament_player_menu(
+            interaction.user.id,
+            tournament.pk,
+            mode="overview",
+            notice="You left the tournament. Pick **Legacy** or **Main** below to rejoin.",
+        )
+        await interaction.response.edit_message(view=layout)
+
+
 class TournamentPlayerTabControls(ActionRow):
     def __init__(self, owner_id: int, tournament_id: int, active: str):
         super().__init__()
@@ -177,6 +213,12 @@ async def viewer_can_join(tournament: Tournament, viewer_id: int) -> bool:
     ).aexists()
 
 
+async def viewer_is_registered(tournament: Tournament, viewer_id: int) -> bool:
+    return await TournamentRegistration.objects.filter(
+        tournament=tournament, player__discord_id=viewer_id
+    ).aexists()
+
+
 async def build_tournament_player_menu(
     owner_id: int, tournament_id: int, *, mode: str = "overview", notice: str = ""
 ) -> LayoutView:
@@ -205,6 +247,17 @@ async def build_tournament_player_menu(
         container.add_item(Separator())
         container.add_item(TextDisplay("### Join this tournament\nPick **Legacy** or **Main** below."))
         container.add_item(TournamentJoinRow(owner_id, tournament_id))
+    elif mode == "overview" and registration_is_open(tournament) and await viewer_is_registered(
+        tournament, owner_id
+    ):
+        container.add_item(Separator())
+        container.add_item(
+            TextDisplay(
+                "### Leave tournament\n"
+                "Registration is still open — you can leave before group stage starts."
+            )
+        )
+        container.add_item(TournamentLeaveRow(owner_id, tournament_id))
 
     container.add_item(Separator())
     container.add_item(TournamentPlayerTabControls(owner_id, tournament_id, mode))

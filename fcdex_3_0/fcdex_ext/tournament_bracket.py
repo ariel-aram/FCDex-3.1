@@ -43,19 +43,33 @@ async def create_semifinal_pairings(tournament: Tournament) -> int:
     return created
 
 
+async def semifinal_winner_for_group(tournament: Tournament, group: str) -> Player | None:
+    match = (
+        await TournamentMatch.objects.filter(
+            tournament=tournament,
+            round=TournamentRound.SEMIFINAL,
+            group=group,
+            completed=True,
+        )
+        .select_related("winner")
+        .afirst()
+    )
+    return match.winner if match else None
+
+
 async def create_final_pairing(tournament: Tournament) -> bool:
+    """Grand final is always Legacy semifinal winner vs Main semifinal winner."""
     if await TournamentMatch.objects.filter(tournament=tournament, round=TournamentRound.FINAL).aexists():
         return False
-    winners: list[Player] = []
-    async for match in TournamentMatch.objects.filter(
-        tournament=tournament, round=TournamentRound.SEMIFINAL, completed=True
-    ).select_related("winner"):
-        if match.winner:
-            winners.append(match.winner)
-    if len(winners) < 2:
+    legacy_winner = await semifinal_winner_for_group(tournament, TournamentGroup.LEGACY.value)
+    main_winner = await semifinal_winner_for_group(tournament, TournamentGroup.MAIN.value)
+    if legacy_winner is None or main_winner is None:
         return False
     await TournamentMatch.objects.acreate(
-        tournament=tournament, round=TournamentRound.FINAL, player1=winners[0], player2=winners[1]
+        tournament=tournament,
+        round=TournamentRound.FINAL,
+        player1=legacy_winner,
+        player2=main_winner,
     )
     return True
 

@@ -200,22 +200,27 @@ async def run_tournament_advance(tournament: Tournament) -> tuple[bool, str]:
         if await TournamentMatch.objects.filter(tournament=tournament, round=TournamentRound.FINAL).aexists():
             return False, "Grand final already exists."
 
-        winners: list[Player] = []
-        async for match in TournamentMatch.objects.filter(
-            tournament=tournament, round=TournamentRound.SEMIFINAL, completed=True
-        ).select_related("winner"):
-            if match.winner:
-                winners.append(match.winner)
+        from fcdex_3_0.fcdex_ext.tournament_bracket import create_final_pairing, semifinal_winner_for_group
 
-        if len(winners) < 2:
-            return False, "Need at least **2** completed semifinal winners to create the grand final."
+        legacy_winner = await semifinal_winner_for_group(tournament, TournamentGroup.LEGACY.value)
+        main_winner = await semifinal_winner_for_group(tournament, TournamentGroup.MAIN.value)
+        if legacy_winner is None or main_winner is None:
+            return False, (
+                "Need **Legacy** and **Main** semifinal winners before the grand final — "
+                "finish both semifinals via `/tournament match`."
+            )
 
-        await TournamentMatch.objects.acreate(
-            tournament=tournament, round=TournamentRound.FINAL, player1=winners[0], player2=winners[1]
-        )
+        if not await create_final_pairing(tournament):
+            return False, "Grand final already exists or could not be created."
+
         tournament.status = TournamentStatus.FINALS
         await tournament.asave(update_fields=("status",))
-        return True, "Grand final match created! Both finalists must battle via `/tournament match`."
+        return (
+            True,
+            "Grand final created — **Legacy** "
+            f"<@{legacy_winner.discord_id}> vs **Main** <@{main_winner.discord_id}>! "
+            "Battle via `/tournament match`.",
+        )
 
     if tournament.status == TournamentStatus.FINALS:
         _, final_created = await sync_bracket_for_status(tournament)
