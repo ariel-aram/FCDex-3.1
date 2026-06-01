@@ -32,6 +32,15 @@ if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
 
 
+def _admin_access_check():
+    async def predicate(interaction: discord.Interaction) -> bool:
+        if interaction.guild is None:
+            return True
+        return bool(interaction.user.guild_permissions.manage_guild)
+
+    return app_commands.check(predicate)
+
+
 class FcdexCog(commands.GroupCog, group_name="fcdex"):
     """FCDex 3.1 feature directory."""
 
@@ -106,19 +115,19 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
         layout = build_panel_layout(title=entry.label, subtitle=entry.description, sections=[body])
         await interaction.response.send_message(view=layout, ephemeral=True)  # pyright: ignore[reportArgumentType]
 
-    @app_commands.command(name="admin", description="FCDex admin hub — shop, craft, boss, owners (Manage Server)")
-    @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.command(name="admin", description="FCDex admin hub — shop, craft, boss, owners")
+    @_admin_access_check()
     async def admin(self, interaction: discord.Interaction):
-        guild_id = interaction.guild.id if interaction.guild else None
-        layout = build_admin_hub_layout(interaction.user.id, guild_id)
+        guild_id = interaction.guild_id
+        layout = build_admin_hub_layout(interaction.user.id, guild_id, interaction.channel_id)
         await interaction.response.send_message(view=layout, ephemeral=True)  # pyright: ignore[reportArgumentType]
 
-    @app_commands.command(name="boss", description="Guild boss raid — join, pick clubballs, track damage")
+    @app_commands.command(name="boss", description="Boss raid — join, pick clubballs, track damage")
     async def boss(self, interaction: discord.Interaction):
-        if interaction.guild is None:
-            await interaction.response.send_message("Boss raids run in a server.", ephemeral=True)
-            return
-        layout = await build_boss_player_layout(interaction.user.id, interaction.guild.id)
+        from fcdex_3_1.fcdex_ext.interaction_context import admin_context
+
+        ctx = admin_context(interaction)
+        layout = await build_boss_player_layout(interaction.user.id, ctx, notice="")
         await interaction.response.send_message(view=layout, ephemeral=True)  # pyright: ignore[reportArgumentType]
 
     @app_commands.command(name="quests", description="Daily quest progress")

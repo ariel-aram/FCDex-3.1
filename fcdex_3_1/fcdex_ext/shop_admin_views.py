@@ -9,6 +9,7 @@ from discord.ui import ActionRow, Button, Container, Modal, Separator, TextDispl
 from ballsdex.core.discord import LayoutView
 from bd_models.models import Special
 from fcdex_3_1.fcdex_ext.bd_resolve import resolve_ball_input
+from fcdex_3_1.fcdex_ext.interaction_context import AdminContext, admin_context
 from fcdex_3_1.fcdex_ext.shop_logic import format_bundle_line_async, list_shop_bundles
 from fcdex_3_1.fcdex_ext.views import AdminHubBackRow, truncate_text
 from fcdex_3_1.models import ShopBundle, ShopBundleItem
@@ -22,7 +23,6 @@ log = logging.getLogger("fcdex_3_1.shop.admin")
 class CreateBundleModal(Modal, title="New shop bundle"):
     name = TextInput(label="Bundle name", max_length=64)
     price = TextInput(label="Coin price", placeholder="1000", max_length=12)
-    description = TextInput(label="Description (optional)", required=False, style=discord.TextStyle.paragraph)
     emoji = TextInput(label="Emoji (optional)", required=False, max_length=8, default="🛒")
 
     def __init__(self, owner_id: int):
@@ -45,9 +45,12 @@ class CreateBundleModal(Modal, title="New shop bundle"):
             await interaction.response.send_message(f"A bundle named **{name}** already exists.", ephemeral=True)
             return
         bundle = await ShopBundle.objects.acreate(
-            name=name, price=price, description=self.description.value or "", emoji=(self.emoji.value or "🛒")[:32]
+            name=name, price=price, description="", emoji=(self.emoji.value or "🛒")[:32]
         )
-        layout = await build_shop_admin_layout(self.owner_id, notice=f"Created **{bundle.name}** (`#{bundle.pk}`).")
+        ctx = admin_context(interaction)
+        layout = await build_shop_admin_layout(
+            self.owner_id, ctx, notice=f"Created **{bundle.name}** (`#{bundle.pk}`)."
+        )
         await interaction.response.edit_message(view=layout)
 
 
@@ -95,8 +98,9 @@ class AddBundleItemModal(Modal, title="Add clubball to bundle"):
                 return
         await ShopBundleItem.objects.acreate(bundle=bundle, ball=ball, quantity=quantity, special=special)
         tag = f" with **{special.name}**" if special else ""
+        ctx = admin_context(interaction)
         layout = await build_shop_admin_layout(
-            self.owner_id, notice=f"Added **{quantity}×** {ball.country}{tag} to **{bundle.name}**."
+            self.owner_id, ctx, notice=f"Added **{quantity}×** {ball.country}{tag} to **{bundle.name}**."
         )
         await interaction.response.edit_message(view=layout)
 
@@ -116,7 +120,8 @@ class ShopAdminControls(ActionRow):
 
     @button(label="Refresh", style=discord.ButtonStyle.secondary, emoji="🔄")
     async def refresh(self, interaction: Interaction, button: Button):
-        layout = await build_shop_admin_layout(self.owner_id)
+        ctx = admin_context(interaction)
+        layout = await build_shop_admin_layout(self.owner_id, ctx)
         await interaction.response.edit_message(view=layout)
 
 
@@ -142,11 +147,12 @@ class ShopBundleToggleSelect(discord.ui.Select):
         bundle.enabled = not bundle.enabled
         await bundle.asave(update_fields=("enabled",))
         state = "enabled" if bundle.enabled else "disabled"
-        layout = await build_shop_admin_layout(self.owner_id, notice=f"**{bundle.name}** is now {state}.")
+        ctx = admin_context(interaction)
+        layout = await build_shop_admin_layout(self.owner_id, ctx, notice=f"**{bundle.name}** is now {state}.")
         await interaction.response.edit_message(view=layout)
 
 
-async def build_shop_admin_layout(owner_id: int, guild_id: int | None = None, *, notice: str = "") -> LayoutView:
+async def build_shop_admin_layout(owner_id: int, ctx: AdminContext, *, notice: str = "") -> LayoutView:
     bundles = await list_shop_bundles(enabled_only=False)
     lines = [await format_bundle_line_async(b) + f"\n-# `#{b.pk}` · {'✅' if b.enabled else '🚫'}" for b in bundles]
     body = "\n\n".join(lines) if lines else "*No bundles yet — create one with **New bundle**.*"
@@ -173,6 +179,6 @@ async def build_shop_admin_layout(owner_id: int, guild_id: int | None = None, *,
         row.add_item(ShopBundleToggleSelect(owner_id, bundles))
         container.add_item(row)
     container.add_item(Separator())
-    container.add_item(AdminHubBackRow(owner_id, guild_id))
+    container.add_item(AdminHubBackRow(owner_id))
     layout.add_item(container)
     return layout

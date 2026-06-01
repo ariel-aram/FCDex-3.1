@@ -9,7 +9,9 @@ from discord.ui import ActionRow, Button, Container, Modal, Separator, TextDispl
 from ballsdex.core.discord import LayoutView
 from bd_models.models import Ball, BallInstance, Player
 from fcdex_3_1.fcdex_ext import boss_raid
+from fcdex_3_1.fcdex_ext.bd_resolve import resolve_ball_input
 from fcdex_3_1.fcdex_ext.boss_raid import get_raid
+from fcdex_3_1.fcdex_ext.interaction_context import AdminContext, admin_context
 from fcdex_3_1.fcdex_ext.views import AdminHubBackRow, truncate_text
 
 if TYPE_CHECKING:
@@ -18,14 +20,32 @@ if TYPE_CHECKING:
 log = logging.getLogger("fcdex_3_1.boss.views")
 
 
+async def _post_raid_announcement(
+    interaction: Interaction, *, boss_ball: Ball, raid: boss_raid.BossRaid, scope_id: int
+) -> None:
+    emoji = interaction.client.get_emoji(boss_ball.emoji_id) if boss_ball.emoji_id else "👹"
+    view = BossJoinView(scope_id)
+    file = None
+    if boss_ball.collection_card:
+        ext = boss_ball.collection_card.name.split(".")[-1]
+        file = discord.File(str(boss_ball.collection_card.path), filename=f"boss.{ext}")
+    content = (
+        f"# Boss raid — {emoji} **{boss_ball.country}**\n"
+        f"-# HP: **{raid.current_hp:,}** · Join below · admins: `/fcdex admin` → Boss"
+    )
+    msg = await interaction.channel.send(content=content, file=file, view=view)  # type: ignore[union-attr]
+    raid.announcement_message_id = msg.id
+    view.message = msg
+
+
 class BossJoinView(View):
-    def __init__(self, guild_id: int):
+    def __init__(self, scope_id: int):
         super().__init__(timeout=900)
-        self.guild_id = guild_id
+        self.scope_id = scope_id
 
     @discord.ui.button(label="Join boss raid", style=discord.ButtonStyle.primary, emoji="⚔️")
     async def join(self, interaction: Interaction, button: discord.ui.Button):
-        raid = get_raid(self.guild_id)
+        raid = get_raid(self.scope_id)
         if raid is None:
             await interaction.response.send_message("This raid has ended.", ephemeral=True)
             return
@@ -35,6 +55,12 @@ class BossJoinView(View):
 
 class StartBossModal(Modal, title="Start boss raid"):
     hp = TextInput(label="Boss HP", placeholder="10000", max_length=12, default="10000")
+    reward_clubball = TextInput(
+        label="Reward clubball (optional)",
+        required=False,
+        placeholder="PK or country — defaults to boss clubball",
+        max_length=128,
+    )
 
     def __init__(self, owner_id: int, boss_ball: Ball):
         super().__init__()
@@ -45,9 +71,7 @@ class StartBossModal(Modal, title="Start boss raid"):
         if interaction.user.id != self.owner_id:
             await interaction.response.send_message("This panel is not yours.", ephemeral=True)
             return
-        if interaction.guild is None:
-            await interaction.response.send_message("Boss raids must be started in a server.", ephemeral=True)
-            return
+        ctx = admin_context(interaction)
         try:
             hp = int(self.hp.value.strip().replace(",", ""))
             if hp < 100:
@@ -55,39 +79,114 @@ class StartBossModal(Modal, title="Start boss raid"):
         except ValueError:
             await interaction.response.send_message("HP must be at least 100.", ephemeral=True)
             return
+        reward_ball = self.boss_ball
+        raw_reward = (self.reward_clubball.value or "").strip()
+        if raw_reward:
+            resolved = await resolve_ball_input(raw_reward)
+            if resolved is None:
+                await interaction.response.send_message("Reward clubball not found.", ephemeral=True)
+                return
+            reward_ball = resolved
+        await interaction.response.defer(ephemeral=True)
         try:
             raid = boss_raid.start_raid(
-                guild_id=interaction.guild.id,
-                channel_id=interaction.channel.id,  # type: ignore[union-attr]
+                scope_id=ctx.scope_id,
+                channel_id=ctx.channel_id,
                 boss_ball=self.boss_ball,
                 hp=hp,
+                reward_ball=reward_ball if reward_ball.pk != self.boss_ball.pk else None,
+                reward_server_id=ctx.reward_server_id,
             )
         except ValueError as exc:
-            await interaction.response.send_message(str(exc), ephemeral=True)
+            await interaction.followup.send(str(exc), ephemeral=True)
             return
-
-        emoji = interaction.client.get_emoji(self.boss_ball.emoji_id) if self.boss_ball.emoji_id else "👹"
-        view = BossJoinView(interaction.guild.id)
         try:
-            file = None
-            if self.boss_ball.collection_card:
-                ext = self.boss_ball.collection_card.name.split(".")[-1]
-                file = discord.File(str(self.boss_ball.collection_card.path), filename=f"boss.{ext}")
-            content = (
-                f"# Boss raid — {emoji} **{self.boss_ball.country}**\n"
-                f"-# HP: **{raid.current_hp:,}** · Join below, then admins run rounds in `/fcdex admin` → Boss."
-            )
-            msg = await interaction.channel.send(content=content, file=file, view=view)  # type: ignore[union-attr]
-            raid.announcement_message_id = msg.id
-            view.message = msg
+            await _post_raid_announcement(interaction, boss_ball=self.boss_ball, raid=raid, scope_id=ctx.scope_id)
         except Exception:
             log.exception("Failed to post boss announcement")
+        layout = await build_boss_admin_layout(ctx, self.owner_id, notice="Raid started in this channel.")
+        await interaction.edit_original_response(view=layout)
 
-        layout = await build_boss_admin_layout(
-            self.owner_id,
-            interaction.guild.id,
-            notice="Raid started in this channel.",
-        )
+
+class StartBossInputModal(Modal, title="Start boss by PK / name"):
+    clubball = TextInput(label="Boss clubball", placeholder="PK or country name (e.g. 42)", max_length=128)
+    hp = TextInput(label="Boss HP", placeholder="10000", max_length=12, default="10000")
+    reward_clubball = TextInput(
+        label="Reward clubball (optional)",
+        required=False,
+        placeholder="PK or country — winner prize",
+        max_length=128,
+    )
+
+    def __init__(self, owner_id: int):
+        super().__init__()
+        self.owner_id = owner_id
+
+    async def on_submit(self, interaction: Interaction) -> None:
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("This panel is not yours.", ephemeral=True)
+            return
+        boss_ball = await resolve_ball_input(self.clubball.value)
+        if boss_ball is None:
+            await interaction.response.send_message("Boss clubball not found.", ephemeral=True)
+            return
+        ctx = admin_context(interaction)
+        try:
+            hp = int(self.hp.value.strip().replace(",", ""))
+            if hp < 100:
+                raise ValueError
+        except ValueError:
+            await interaction.response.send_message("HP must be at least 100.", ephemeral=True)
+            return
+        reward_ball: Ball | None = None
+        raw_reward = (self.reward_clubball.value or "").strip()
+        if raw_reward:
+            reward_ball = await resolve_ball_input(raw_reward)
+            if reward_ball is None:
+                await interaction.response.send_message("Reward clubball not found.", ephemeral=True)
+                return
+        await interaction.response.defer(ephemeral=True)
+        try:
+            raid = boss_raid.start_raid(
+                scope_id=ctx.scope_id,
+                channel_id=ctx.channel_id,
+                boss_ball=boss_ball,
+                hp=hp,
+                reward_ball=reward_ball,
+                reward_server_id=ctx.reward_server_id,
+            )
+        except ValueError as exc:
+            await interaction.followup.send(str(exc), ephemeral=True)
+            return
+        try:
+            await _post_raid_announcement(interaction, boss_ball=boss_ball, raid=raid, scope_id=ctx.scope_id)
+        except Exception:
+            log.exception("Failed to post boss announcement")
+        layout = await build_boss_admin_layout(ctx, self.owner_id, notice="Raid started in this channel.")
+        await interaction.edit_original_response(view=layout)
+
+
+class BossPlayerJoinRow(ActionRow):
+    def __init__(self, user_id: int, ctx: AdminContext):
+        super().__init__()
+        self.user_id = user_id
+        self.ctx = ctx
+
+    @button(label="Join raid", style=discord.ButtonStyle.primary, emoji="⚔️")
+    async def join_btn(self, interaction: Interaction, button: Button):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("This panel is private to you.", ephemeral=True)
+            return
+        ctx = admin_context(interaction)
+        raid = get_raid(ctx.scope_id)
+        if raid is None:
+            await interaction.response.send_message("This raid has ended.", ephemeral=True)
+            return
+        ok, msg = boss_raid.join_raid(raid, interaction.user.id)
+        if not ok:
+            await interaction.response.send_message(msg, ephemeral=True)
+            return
+        layout = await build_boss_player_layout(ctx, self.user_id, notice=msg)
         await interaction.response.edit_message(view=layout)
 
 
@@ -105,9 +204,8 @@ class BossPlayerCardSelect(discord.ui.Select):
         super().__init__(placeholder="Pick a clubball for this round…", options=options, min_values=1, max_values=1)
 
     async def callback(self, interaction: Interaction) -> None:
-        if interaction.guild is None:
-            return
-        raid = get_raid(interaction.guild.id)
+        ctx = admin_context(interaction)
+        raid = get_raid(ctx.scope_id)
         if raid is None:
             await interaction.response.send_message("No active raid.", ephemeral=True)
             return
@@ -119,8 +217,8 @@ class BossPlayerCardSelect(discord.ui.Select):
         if inst.player_id != player.pk:
             await interaction.response.send_message("That card is not yours.", ephemeral=True)
             return
-        ok, message = await boss_raid.submit_card(raid, interaction.user.id, inst)
-        layout = await build_boss_player_layout(interaction.user.id, interaction.guild.id, notice=message)
+        _ok, message = await boss_raid.submit_card(raid, interaction.user.id, inst)
+        layout = await build_boss_player_layout(ctx, interaction.user.id, notice=message)
         await interaction.response.edit_message(view=layout)
 
 
@@ -142,10 +240,10 @@ class BossStartBallSelect(discord.ui.Select):
 
 
 class BossAdminControls(ActionRow):
-    def __init__(self, owner_id: int, guild_id: int):
+    def __init__(self, owner_id: int, ctx: AdminContext):
         super().__init__()
         self.owner_id = owner_id
-        self.guild_id = guild_id
+        self.ctx = ctx
 
     @button(label="Attack round", style=discord.ButtonStyle.danger, emoji="⚔️")
     async def attack_round(self, interaction: Interaction, button: Button):
@@ -157,49 +255,67 @@ class BossAdminControls(ActionRow):
 
     @button(label="Resolve", style=discord.ButtonStyle.primary, emoji="✅")
     async def resolve(self, interaction: Interaction, button: Button):
-        raid = get_raid(self.guild_id)
+        ctx = admin_context(interaction)
+        raid = get_raid(ctx.scope_id)
         if raid is None:
             await interaction.response.send_message("No active raid.", ephemeral=True)
             return
         log_text = await boss_raid.resolve_round(raid)
-        layout = await build_boss_admin_layout(self.owner_id, self.guild_id, notice=log_text)
+        layout = await build_boss_admin_layout(ctx, self.owner_id, notice=log_text)
         await interaction.response.edit_message(view=layout)
 
     @button(label="Conclude", style=discord.ButtonStyle.success, emoji="🏁")
     async def conclude(self, interaction: Interaction, button: Button):
-        raid = get_raid(self.guild_id)
+        ctx = admin_context(interaction)
+        raid = get_raid(ctx.scope_id)
         if raid is None:
             await interaction.response.send_message("No active raid.", ephemeral=True)
             return
         summary, _ = await boss_raid.conclude_raid(raid, grant_reward=True)
-        layout = await build_boss_admin_layout(self.owner_id, self.guild_id, notice=summary)
+        layout = await build_boss_admin_layout(ctx, self.owner_id, notice=summary)
         await interaction.response.edit_message(view=layout)
 
     async def _round(self, interaction: Interaction, *, attack: bool) -> None:
-        raid = get_raid(self.guild_id)
+        ctx = admin_context(interaction)
+        raid = get_raid(ctx.scope_id)
         if raid is None:
             await interaction.response.send_message("No active raid.", ephemeral=True)
             return
         ok, message = boss_raid.begin_round(raid, attack_phase=attack)
-        layout = await build_boss_admin_layout(self.owner_id, self.guild_id, notice=message if ok else message)
+        layout = await build_boss_admin_layout(ctx, self.owner_id, notice=message)
         await interaction.response.edit_message(view=layout)
 
 
-async def build_boss_player_layout(user_id: int, guild_id: int, *, notice: str = "") -> LayoutView:
-    raid = get_raid(guild_id)
+class BossStartByInputRow(ActionRow):
+    def __init__(self, owner_id: int):
+        super().__init__()
+        self.owner_id = owner_id
+
+    @button(label="Start by PK / name", style=discord.ButtonStyle.success, emoji="📝")
+    async def start_input(self, interaction: Interaction, button: Button):
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("This panel is not yours.", ephemeral=True)
+            return
+        await interaction.response.send_modal(StartBossInputModal(self.owner_id))
+
+
+async def build_boss_player_layout(ctx: AdminContext, user_id: int, *, notice: str = "") -> LayoutView:
+    raid = get_raid(ctx.scope_id)
     layout = LayoutView(timeout=300)
     container = Container()
 
     if raid is None:
-        container.add_item(TextDisplay("# 👑 Boss raid\n*No active raid in this server.*"))
+        container.add_item(TextDisplay("# 👑 Boss raid\n*No active raid in this channel.*"))
         layout.add_item(container)
         return layout
 
     boss = await Ball.objects.aget(pk=raid.boss_ball_id)
     participant = raid.participants.get(user_id)
+    joined = len(raid.participants)
     header = (
         f"# 👑 {boss.country}\n"
-        f"HP **{raid.current_hp:,}** / **{raid.max_hp:,}** · Round **{raid.round}** · phase `{raid.phase}`"
+        f"HP **{raid.current_hp:,}** / **{raid.max_hp:,}** · "
+        f"Round **{raid.round}/{boss_raid.MAX_ROUNDS}** · phase `{raid.phase}` · **{joined}** joined"
     )
     if notice:
         header += f"\n\n{notice}"
@@ -209,7 +325,8 @@ async def build_boss_player_layout(user_id: int, guild_id: int, *, notice: str =
 
     if raid.phase == "join":
         container.add_item(Separator())
-        container.add_item(TextDisplay("-# Tap **Join** on the raid announcement, or ask an admin to start rounds."))
+        container.add_item(BossPlayerJoinRow(user_id, ctx))
+        container.add_item(TextDisplay("-# Or tap **Join** on the raid announcement message."))
     elif raid.phase == "pick" and participant and not participant.disqualified:
         player = await Player.objects.filter(discord_id=user_id).afirst()
         if player:
@@ -230,21 +347,24 @@ async def build_boss_player_layout(user_id: int, guild_id: int, *, notice: str =
     return layout
 
 
-async def build_boss_admin_layout(owner_id: int, guild_id: int, *, notice: str = "") -> LayoutView:
-    raid = get_raid(guild_id)
+async def build_boss_admin_layout(ctx: AdminContext, owner_id: int, *, notice: str = "") -> LayoutView:
+    raid = get_raid(ctx.scope_id)
     layout = LayoutView(timeout=600)
     container = Container()
 
     if raid is None:
         body = (
-            "*No raid — start one with **Start raid** "
-            "(pick a clubball in the command options first via `/fcdex admin`).*"
+            "*No raid in this channel — pick a boss below or use **Start by PK / name** "
+            "(clubball PK, country, optional reward collectible).*"
         )
     else:
         boss = await Ball.objects.aget(pk=raid.boss_ball_id)
+        reward = await Ball.objects.aget(pk=raid.reward_ball_id_effective)
+        reward_line = f"\n-# Fight reward: **{reward.country}**"
         body = (
-            f"**{boss.country}** · HP **{raid.current_hp:,}** / **{raid.max_hp:,}**\n"
-            f"Round **{raid.round}** · phase `{raid.phase}` · **{len(raid.alive_participant_ids)}** fighters\n\n"
+            f"**{boss.country}** · HP **{raid.current_hp:,}** / **{raid.max_hp:,}**{reward_line}\n"
+            f"Round **{raid.round}/{boss_raid.MAX_ROUNDS}** · phase `{raid.phase}` · "
+            f"**{len(raid.participants)}** joined · **{len(raid.alive_participant_ids)}** active\n\n"
             f"{boss_raid.standings(raid)}"
         )
     if notice:
@@ -254,8 +374,8 @@ async def build_boss_admin_layout(owner_id: int, guild_id: int, *, notice: str =
         TextDisplay(
             truncate_text(
                 "# 👑 Boss admin\n"
-                "-# Inspired by BallsDex Boss Pack · Components v2.\n"
-                "-# Requires a **Boss** special in your dex for winner rewards."
+                "-# Works in servers and DMs · Components v2.\n"
+                "-# Set boss + optional **reward clubball** · needs **Boss** special for tagged wins."
             )
         )
     )
@@ -263,15 +383,16 @@ async def build_boss_admin_layout(owner_id: int, guild_id: int, *, notice: str =
     container.add_item(TextDisplay(truncate_text(body)))
     if raid is not None:
         container.add_item(Separator())
-        container.add_item(BossAdminControls(owner_id, guild_id))
+        container.add_item(BossAdminControls(owner_id, ctx))
     else:
         balls = [b async for b in Ball.objects.filter(enabled=True).order_by("country")[:25]]
+        container.add_item(Separator())
+        container.add_item(BossStartByInputRow(owner_id))
         if balls:
-            container.add_item(Separator())
             row = ActionRow()
             row.add_item(BossStartBallSelect(owner_id, balls))
             container.add_item(row)
     container.add_item(Separator())
-    container.add_item(AdminHubBackRow(owner_id, guild_id))
+    container.add_item(AdminHubBackRow(owner_id))
     layout.add_item(container)
     return layout

@@ -22,16 +22,15 @@ async def place_bet(
         return False, f"Bets must be between **{tournament.min_bet:,}** and **{tournament.max_bet:,}** coins."
 
     bettor = await Player.objects.aget(pk=bettor.pk)
-    if bettor.money < amount:
+    if not bettor.can_afford(amount):
         return False, f"You only have **{bettor.money:,}** coins."
 
     if await TournamentBet.objects.filter(match=match, bettor=bettor, resolved=False).aexists():
         return False, "You already have an open bet on this match."
 
-    await bettor.add_money(-amount)
-    bettor = await Player.objects.aget(pk=bettor.pk)
-    if bettor.money < 0:
-        await bettor.add_money(amount)
+    try:
+        await bettor.remove_money(amount)
+    except ValueError:
         return False, "Not enough coins for that wager."
 
     await TournamentBet.objects.acreate(tournament=tournament, match=match, bettor=bettor, picked=picked, amount=amount)
@@ -50,6 +49,7 @@ async def resolve_bets_for_match(match: TournamentMatch, winner: Player) -> list
         if not updated:
             continue
         if payout:
-            await bet.bettor.add_money(payout)
-            lines.append(f"<@{bet.bettor.discord_id}> won **{payout:,}** coins")
+            bettor = await Player.objects.aget(pk=bet.bettor_id)
+            await bettor.add_money(payout)
+            lines.append(f"<@{bettor.discord_id}> won **{payout:,}** coins")
     return lines

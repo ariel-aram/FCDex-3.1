@@ -7,7 +7,8 @@ import discord
 from discord.ui import ActionRow, Button, Container, Modal, Separator, TextDisplay, TextInput, button
 
 from ballsdex.core.discord import LayoutView
-from bd_models.models import Ball
+from fcdex_3_1.fcdex_ext.bd_resolve import resolve_ball_input
+from fcdex_3_1.fcdex_ext.interaction_context import AdminContext, admin_context
 from fcdex_3_1.fcdex_ext.views import AdminHubBackRow, truncate_text
 from fcdex_3_1.models import SBCRecipe
 
@@ -19,9 +20,9 @@ log = logging.getLogger("fcdex_3_1.craft.admin")
 
 class CreateSBCModal(Modal, title="New SBC recipe"):
     name = TextInput(label="Recipe name", max_length=64)
-    required_ball = TextInput(label="Required clubball (country name)", max_length=128)
+    required_ball = TextInput(label="Required clubball", placeholder="PK or country name", max_length=128)
     required_count = TextInput(label="Required count", default="1", max_length=3)
-    reward_ball = TextInput(label="Reward clubball (country name)", max_length=128)
+    reward_ball = TextInput(label="Reward clubball", placeholder="PK or country name", max_length=128)
     reward_money = TextInput(label="Bonus coins (optional)", required=False, default="0", max_length=12)
 
     def __init__(self, owner_id: int):
@@ -40,8 +41,8 @@ class CreateSBCModal(Modal, title="New SBC recipe"):
         except ValueError:
             await interaction.response.send_message("Invalid count or coin reward.", ephemeral=True)
             return
-        req_ball = await Ball.objects.filter(country__iexact=self.required_ball.value.strip()).afirst()
-        rew_ball = await Ball.objects.filter(country__iexact=self.reward_ball.value.strip()).afirst()
+        req_ball = await resolve_ball_input(self.required_ball.value)
+        rew_ball = await resolve_ball_input(self.reward_ball.value)
         if req_ball is None or rew_ball is None:
             await interaction.response.send_message("Could not find one of the clubballs in the dex.", ephemeral=True)
             return
@@ -57,7 +58,8 @@ class CreateSBCModal(Modal, title="New SBC recipe"):
             reward_ball=rew_ball,
             reward_money=reward_money,
         )
-        layout = await build_craft_admin_layout(self.owner_id, notice=f"Created SBC **{name}**.")
+        ctx = admin_context(interaction)
+        layout = await build_craft_admin_layout(self.owner_id, ctx, notice=f"Created SBC **{name}**.")
         await interaction.response.edit_message(view=layout)
 
 
@@ -72,7 +74,8 @@ class CraftAdminControls(ActionRow):
 
     @button(label="Refresh", style=discord.ButtonStyle.secondary, emoji="🔄")
     async def refresh(self, interaction: Interaction, button: Button):
-        layout = await build_craft_admin_layout(self.owner_id)
+        ctx = admin_context(interaction)
+        layout = await build_craft_admin_layout(self.owner_id, ctx)
         await interaction.response.edit_message(view=layout)
 
 
@@ -97,11 +100,12 @@ class SBCRecipeToggleSelect(discord.ui.Select):
         recipe.enabled = not recipe.enabled
         await recipe.asave(update_fields=("enabled",))
         state = "enabled" if recipe.enabled else "disabled"
-        layout = await build_craft_admin_layout(self.owner_id, notice=f"**{recipe.name}** is now {state}.")
+        ctx = admin_context(interaction)
+        layout = await build_craft_admin_layout(self.owner_id, ctx, notice=f"**{recipe.name}** is now {state}.")
         await interaction.response.edit_message(view=layout)
 
 
-async def build_craft_admin_layout(owner_id: int, guild_id: int | None = None, *, notice: str = "") -> LayoutView:
+async def build_craft_admin_layout(owner_id: int, ctx: AdminContext, *, notice: str = "") -> LayoutView:
     recipes = [r async for r in SBCRecipe.objects.select_related("required_ball", "reward_ball").order_by("name")]
     lines: list[str] = []
     for recipe in recipes:
@@ -122,7 +126,7 @@ async def build_craft_admin_layout(owner_id: int, guild_id: int | None = None, *
             truncate_text(
                 "# 🧪 Craft admin\n"
                 "-# Manage SBC recipes without the web panel.\n"
-                "-# Players use `/craft menu` and `/craft complete`."
+                "-# Clubball fields accept **PK or country name**."
             )
         )
     )
@@ -135,6 +139,6 @@ async def build_craft_admin_layout(owner_id: int, guild_id: int | None = None, *
         row.add_item(SBCRecipeToggleSelect(owner_id, recipes))
         container.add_item(row)
     container.add_item(Separator())
-    container.add_item(AdminHubBackRow(owner_id, guild_id))
+    container.add_item(AdminHubBackRow(owner_id))
     layout.add_item(container)
     return layout

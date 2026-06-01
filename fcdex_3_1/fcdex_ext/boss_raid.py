@@ -27,12 +27,13 @@ class BossParticipant:
 
 @dataclass
 class BossRaid:
-    guild_id: int
+    guild_id: int  # scope key: guild id or DM channel id
     channel_id: int
     boss_ball_id: int
     max_hp: int
     current_hp: int
     reward_ball_id: int | None = None
+    reward_server_id: int | None = None  # BallsDex server_id on grants; None in DMs
     phase: BossPhase = "join"
     round: int = 0
     is_attack_round: bool = True
@@ -63,10 +64,15 @@ def _raids() -> dict[int, BossRaid]:
 _ACTIVE_RAIDS: dict[int, BossRaid] = {}
 
 
-def get_raid(guild_id: int | None) -> BossRaid | None:
-    if guild_id is None:
+def raid_scope_id(_guild_id: int | None, channel_id: int) -> int:
+    """Raids are scoped to the channel (guild channel or DM) — always reliable."""
+    return channel_id
+
+
+def get_raid(scope_id: int | None) -> BossRaid | None:
+    if scope_id is None:
         return None
-    return _ACTIVE_RAIDS.get(guild_id)
+    return _ACTIVE_RAIDS.get(scope_id)
 
 
 async def ensure_boss_special() -> Special | None:
@@ -74,24 +80,31 @@ async def ensure_boss_special() -> Special | None:
 
 
 def start_raid(
-    *, guild_id: int, channel_id: int, boss_ball: Ball, hp: int, reward_ball: Ball | None = None
+    *,
+    scope_id: int,
+    channel_id: int,
+    boss_ball: Ball,
+    hp: int,
+    reward_ball: Ball | None = None,
+    reward_server_id: int | None = None,
 ) -> BossRaid:
-    if guild_id in _ACTIVE_RAIDS:
-        raise ValueError("A boss raid is already active in this server.")
+    if scope_id in _ACTIVE_RAIDS:
+        raise ValueError("A boss raid is already active here.")
     raid = BossRaid(
-        guild_id=guild_id,
+        guild_id=scope_id,
         channel_id=channel_id,
         boss_ball_id=boss_ball.pk,
         max_hp=hp,
         current_hp=hp,
         reward_ball_id=reward_ball.pk if reward_ball is not None else None,
+        reward_server_id=reward_server_id,
     )
-    _ACTIVE_RAIDS[guild_id] = raid
+    _ACTIVE_RAIDS[scope_id] = raid
     return raid
 
 
-def end_raid(guild_id: int) -> BossRaid | None:
-    return _ACTIVE_RAIDS.pop(guild_id, None)
+def end_raid(scope_id: int) -> BossRaid | None:
+    return _ACTIVE_RAIDS.pop(scope_id, None)
 
 
 def join_raid(raid: BossRaid, user_id: int) -> tuple[bool, str]:
@@ -214,12 +227,16 @@ async def conclude_raid(raid: BossRaid, *, grant_reward: bool) -> tuple[str, int
                 special=special,
                 attack_bonus=0,
                 health_bonus=0,
-                server_id=raid.guild_id,
+                server_id=raid.reward_server_id,
             )
             lines.append(f"\n🏆 <@{winner_id}> received **{reward_ball.country}** ({special.name})!")
         elif player:
             await BallInstance.objects.acreate(
-                ball=reward_ball, player=player, attack_bonus=0, health_bonus=0, server_id=raid.guild_id
+                ball=reward_ball,
+                player=player,
+                attack_bonus=0,
+                health_bonus=0,
+                server_id=raid.reward_server_id,
             )
             lines.append(f"\n🏆 <@{winner_id}> received **{reward_ball.country}**!")
         else:
