@@ -127,7 +127,7 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
         from fcdex_3_1.fcdex_ext.interaction_context import admin_context
 
         ctx = admin_context(interaction)
-        layout = await build_boss_player_layout(interaction.user.id, ctx, notice="")
+        layout = await build_boss_player_layout(ctx, interaction.user.id, notice="")
         await interaction.response.send_message(view=layout, ephemeral=True)  # pyright: ignore[reportArgumentType]
 
     @app_commands.command(name="quests", description="Daily quest progress")
