@@ -17,6 +17,20 @@ if TYPE_CHECKING:
 log = logging.getLogger("fcdex_3_0.tournament.battle")
 
 
+async def resolve_guild_member(guild: discord.Guild, discord_id: int) -> discord.Member | None:
+    """Return a Member in this guild; fetch from API when not in the gateway cache."""
+    cached = guild.get_member(discord_id)
+    if cached is not None:
+        return cached
+    try:
+        return await guild.fetch_member(discord_id)
+    except discord.NotFound:
+        return None
+    except discord.HTTPException as exc:
+        log.warning("Could not fetch member %s in guild %s: %s", discord_id, guild.id, exc)
+        return None
+
+
 async def find_open_match_between(tournament_id: int, player_a_id: int, player_b_id: int) -> TournamentMatch | None:
     pair = {player_a_id, player_b_id}
     async for match in (
@@ -47,7 +61,7 @@ async def start_tournament_match_battle(
 
     opponent_player_id = match.player2_id if player.pk == match.player1_id else match.player1_id
     opponent_player = await Player.objects.aget(pk=opponent_player_id)
-    opponent_member = interaction.guild.get_member(opponent_player.discord_id)
+    opponent_member = await resolve_guild_member(interaction.guild, opponent_player.discord_id)
     if opponent_member is None:
         return False, "Your opponent must be in this server to start a battle."
 
