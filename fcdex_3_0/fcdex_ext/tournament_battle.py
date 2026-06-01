@@ -56,6 +56,13 @@ async def start_tournament_match_battle(
         return False, "This match has no opponent yet."
 
     player, _ = await Player.objects.aget_or_create(discord_id=initiator.id)
+    if match.verified_winner_id:
+        if match.verified_winner_id == player.pk:
+            return False, (
+                "You already won this match in battle — open `/tournament match` and tap **Claim rewards**."
+            )
+        return False, "This match already has a verified winner — wait for them to claim rewards."
+
     if player.pk not in (match.player1_id, match.player2_id):
         return False, "You aren't a participant in this tournament match."
 

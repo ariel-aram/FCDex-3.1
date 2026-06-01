@@ -95,14 +95,23 @@ async def explain_no_matches(tournament: Tournament, player: Player) -> str:
         )
 
     if status == TournamentStatus.GROUP_STAGE:
-        open_group = await TournamentMatch.objects.filter(
-            tournament=tournament, round=TournamentRound.GROUP, completed=False
-        ).acount()
-        if open_group:
+        from fcdex_3_0.fcdex_ext.tournament_match import list_open_group_matches_in_group
+
+        remaining = await list_open_group_matches_in_group(tournament, reg.group)
+        if remaining:
+            open_lines = [
+                f"**#{m.pk}** · <@{m.player1.discord_id}> **vs** "
+                f"<@{m.player2.discord_id}>"
+                if m.player2
+                else f"**#{m.pk}** · waiting for opponent"
+                for m in remaining
+            ]
             return (
-                f"No open group matches for you right now (`{reg.score}` pts · {reg.get_group_display()}).\n"
-                f"-# **{open_group}** group match(es) still open · finish yours via **Start battle**, "
-                "or wait for the host to advance when all are done."
+                f"You're **caught up** for now (`{reg.score}` pts · {reg.get_group_display()}).\n\n"
+                f"### Still open in {reg.get_group_display()}\n"
+                + "\n".join(open_lines)
+                + "\n\n-# These are other players' matches — use **Bracket** in `/tournament view` "
+                "or `/tournament bet` with match **#** when it's your turn."
             )
         return (
             f"Your group stage is **done** (`{reg.score}` pts).\n"

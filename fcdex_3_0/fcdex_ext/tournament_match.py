@@ -5,19 +5,46 @@ from django.utils import timezone
 from bd_models.models import Player
 from fcdex_3_0.fcdex_ext.tournament_bets import resolve_bets_for_match
 from fcdex_3_0.fcdex_ext.tournament_loot import grant_match_loot, load_match_prizes
-from fcdex_3_0.models import Tournament, TournamentGroup, TournamentMatch, TournamentRegistration
+from fcdex_3_0.models import (
+    Tournament,
+    TournamentGroup,
+    TournamentMatch,
+    TournamentRegistration,
+    TournamentRound,
+    TournamentStatus,
+)
+
+
+async def _player_group(tournament: Tournament, player: Player) -> str | None:
+    try:
+        reg = await TournamentRegistration.objects.aget(tournament=tournament, player=player)
+    except TournamentRegistration.DoesNotExist:
+        return None
+    return reg.group
 
 
 async def list_pending_matches(tournament: Tournament, player: Player) -> list[TournamentMatch]:
+    """Incomplete matches this player is in (group stage scoped to their registration group)."""
+    group = await _player_group(tournament, player)
     matches: list[TournamentMatch] = []
-    async for match in (
-        TournamentMatch.objects.filter(tournament=tournament, completed=False)
-        .select_related("player1", "player2")
-        .order_by("round", "created_at")
-    ):
+    qs = TournamentMatch.objects.filter(tournament=tournament, completed=False).select_related("player1", "player2")
+    if tournament.status == TournamentStatus.GROUP_STAGE and group is not None:
+        qs = qs.filter(round=TournamentRound.GROUP, group=group)
+    async for match in qs.order_by("round", "created_at"):
         if match.player1_id == player.pk or match.player2_id == player.pk:
             matches.append(match)
     return matches
+
+
+async def list_open_group_matches_in_group(tournament: Tournament, group: str) -> list[TournamentMatch]:
+    return [
+        m
+        async for m in TournamentMatch.objects.filter(
+            tournament=tournament, round=TournamentRound.GROUP, group=group, completed=False
+        )
+        .select_related("player1", "player2")
+        .order_by("pk")
+    ]
 
 
 async def record_battle_verification(match_id: int, winner: Player) -> tuple[bool, str]:

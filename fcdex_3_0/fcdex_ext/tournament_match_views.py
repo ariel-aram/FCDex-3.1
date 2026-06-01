@@ -142,10 +142,17 @@ async def build_match_hub_body(tournament: Tournament, player: Player) -> tuple[
         round_name = _round_label(match.round)
         group = _group_label(match.group)
         reward = await _reward_hint(match)
+        if match.verified_winner_id:
+            if match.verified_winner_id == player.pk:
+                step = "✅ **Battle won** — tap **Claim rewards** below to record **+3** pts"
+            else:
+                step = "⏳ Opponent won the battle — waiting for them to claim"
+        else:
+            step = "⚔️ Tap **Start battle**, win the fight, then **Claim rewards**"
         lines.append(
             f"**Match #{match.pk}** · `{round_name}` · **{group}** group\n"
             f"You **vs** <@{opponent.discord_id}>\n"
-            f"-# {reward} · **+3** pts · **Start battle** to fight, then **Claim rewards**"
+            f"-# {reward} · {step}"
         )
     return "\n\n".join(lines), pending
 
@@ -157,7 +164,13 @@ class MatchPickSelect(discord.ui.Select):
         super().__init__(
             placeholder="Select a match…",
             options=[
-                discord.SelectOption(label=f"#{m.pk} · {_group_label(m.group)} · vs opponent", value=str(m.pk))
+                discord.SelectOption(
+                    label=(
+                        f"#{m.pk} · {_group_label(m.group)} · "
+                        + ("claim" if m.verified_winner_id else "battle")
+                    )[:100],
+                    value=str(m.pk),
+                )
                 for m in matches[:25]
             ],
             min_values=1,
@@ -195,6 +208,11 @@ class TournamentMatchBattleRow(ActionRow):
         from ballsdex.core.bot import BallsDexBot
         from fcdex_3_0.fcdex_ext.tournament_battle import start_tournament_match_battle
 
+        if self.menu.selected_match_id not in {m.pk for m in self.menu.pending}:
+            await interaction.response.send_message(
+                "That match is no longer pending — reopen `/tournament match`.", ephemeral=True
+            )
+            return
         match = await TournamentMatch.objects.select_related("player1", "player2").aget(pk=self.menu.selected_match_id)
         ok, result = await start_tournament_match_battle(
             interaction, cast(BallsDexBot, interaction.client), match, interaction.user
