@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fcdex_3_0.fcdex_ext.battle_engine import BattleBall, BattleInstance, gen_battle
+from fcdex_3_1.fcdex_ext.battle_engine import BattleBall, BattleInstance, gen_battle
 
 DEFAULT_BOSS_HP = 8_000
 DEFAULT_BOSS_ATTACK = 120

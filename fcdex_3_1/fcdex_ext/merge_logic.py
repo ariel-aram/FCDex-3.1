@@ -7,23 +7,23 @@ import discord
 from django.db.models import Q
 
 from bd_models.models import Ball, BallInstance, Player, Special, balls
-from fcdex_3_0.fcdex_ext.bd_helpers import format_instance, get_ball, instance_attack, instance_health
-from fcdex_3_0.fcdex_ext.merge_levels import (
+from fcdex_3_1.fcdex_ext.bd_helpers import format_instance, get_ball, instance_attack, instance_health
+from fcdex_3_1.fcdex_ext.merge_levels import (
     MAX_MERGE_LEVEL,
     detect_target_level,
     get_merge_level_config,
     resolve_merge_level_from_bonuses,
 )
-from fcdex_3_0.fcdex_ext.merge_limits import (
+from fcdex_3_1.fcdex_ext.merge_limits import (
     MERGE_WEEKLY_LIMIT,
     calendar_week_bounds,
     merge_special_blocked_message,
     weekly_merge_limit_message,
     weekly_merge_limit_reached,
 )
-from fcdex_3_0.fcdex_ext.merge_special import MERGE_SPECIAL_NAME, get_merge_special
-from fcdex_3_0.fcdex_ext.services import increment_stat
-from fcdex_3_0.models import MergeLog
+from fcdex_3_1.fcdex_ext.merge_special import MERGE_SPECIAL_NAME, get_merge_special
+from fcdex_3_1.fcdex_ext.services import increment_stat
+from fcdex_3_1.models import MergeLog
 from settings.models import settings
 
 if TYPE_CHECKING:
@@ -196,7 +196,7 @@ async def execute_merge(
         source_ids=instance_ids,
     )
     await increment_stat(player, "merges_completed")
-    from fcdex_3_0.fcdex_ext.quest_logic import bump_quest
+    from fcdex_3_1.fcdex_ext.quest_logic import bump_quest
 
     await bump_quest(player, "merge_once")
 

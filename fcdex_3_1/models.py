@@ -322,3 +322,48 @@ class PlayerQuestProgress(models.Model):
 
     def __str__(self) -> str:
         return f"{self.player_id} · {self.quest_key} · {self.day}"
+
+
+class ShopBundle(models.Model):
+    name = models.CharField(max_length=64, unique=True)
+    description = models.TextField(blank=True, default="")
+    price = models.PositiveIntegerField(help_text="Coin price charged from Player.money")
+    enabled = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    emoji = models.CharField(max_length=32, blank=True, default="🛒")
+
+    class Meta:
+        ordering = ("sort_order", "name")
+        verbose_name = "Shop bundle"
+        verbose_name_plural = "Shop bundles"
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class ShopBundleItem(models.Model):
+    bundle = models.ForeignKey(ShopBundle, on_delete=models.CASCADE, related_name="items")
+    bundle_id: int
+    ball = models.ForeignKey(Ball, on_delete=models.CASCADE, related_name="shop_bundle_items")
+    ball_id: int
+    quantity = models.PositiveSmallIntegerField(default=1)
+
+    class Meta:
+        ordering = ("pk",)
+
+    def __str__(self) -> str:
+        return f"{self.bundle_id} · {self.quantity}× ball #{self.ball_id}"
+
+
+class ShopPurchase(models.Model):
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="shop_purchases")
+    player_id: int
+    bundle = models.ForeignKey(ShopBundle, on_delete=models.CASCADE, related_name="purchases")
+    bundle_id: int
+    purchased_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-purchased_at",)
+
+    def __str__(self) -> str:
+        return f"{self.player_id} bought {self.bundle_id} @ {self.purchased_at}"

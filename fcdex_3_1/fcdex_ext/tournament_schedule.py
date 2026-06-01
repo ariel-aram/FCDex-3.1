@@ -4,7 +4,7 @@ from datetime import datetime
 
 from django.utils import timezone
 
-from fcdex_3_0.models import Tournament, TournamentStatus
+from fcdex_3_1.models import Tournament, TournamentStatus
 
 _DATETIME_FORMATS = (
     "%Y-%m-%d %H:%M",

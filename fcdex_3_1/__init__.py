@@ -1,1 +1,1 @@
-default_app_config = "fcdex_3_0.apps.FcdexConfig"
+default_app_config = "fcdex_3_1.apps.FcdexConfig"

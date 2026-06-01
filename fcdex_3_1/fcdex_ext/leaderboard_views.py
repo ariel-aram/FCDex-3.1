@@ -7,7 +7,7 @@ import discord
 from discord.ui import ActionRow, Button, Container, Section, Separator, TextDisplay, Thumbnail, button
 
 from ballsdex.core.discord import LayoutView
-from fcdex_3_0.fcdex_ext.leaderboard_logic import (
+from fcdex_3_1.fcdex_ext.leaderboard_logic import (
     LeaderboardMetric,
     LeaderboardProfile,
     LeaderboardScope,
@@ -22,12 +22,12 @@ from fcdex_3_0.fcdex_ext.leaderboard_logic import (
     page_count,
     slice_page,
 )
-from fcdex_3_0.fcdex_ext.views import truncate_text
+from fcdex_3_1.fcdex_ext.views import truncate_text
 
 if TYPE_CHECKING:
     from discord import Interaction
 
-log = logging.getLogger("fcdex_3_0.leaderboard.views")
+log = logging.getLogger("fcdex_3_1.leaderboard.views")
 
 
 def profile_from_user(user: discord.User | discord.Member) -> LeaderboardProfile:

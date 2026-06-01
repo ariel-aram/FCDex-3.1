@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.utils import timezone
 
 from bd_models.models import Player
-from fcdex_3_0.models import PlayerQuestProgress
+from fcdex_3_1.models import PlayerQuestProgress
 
 DAILY_QUESTS = (
     ("pack_daily", "Open your daily pack", 1, 500),

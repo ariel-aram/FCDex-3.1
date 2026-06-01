@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from bd_models.models import Ball, balls
-from fcdex_3_0.fcdex_ext.rarity_data import (
+from fcdex_3_1.fcdex_ext.rarity_data import (
     CATEGORY_LABELS,
     RarityBallInfo,
     RarityCategory,

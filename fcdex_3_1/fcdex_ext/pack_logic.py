@@ -6,7 +6,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from bd_models.models import Ball, BallInstance, Player, balls
-from fcdex_3_0.models import PackClaim, PackType
+from fcdex_3_1.models import PackClaim, PackType
 
 PACK_COOLDOWNS = {
     PackType.DAILY: timedelta(hours=24),
@@ -67,7 +67,7 @@ async def grant_pack(player: Player, pack_type: str, *, guild_id: int | None) ->
 
     await PackClaim.objects.acreate(player=player, pack_type=pack_type)
     if pack_type == PackType.DAILY:
-        from fcdex_3_0.fcdex_ext.quest_logic import bump_quest
+        from fcdex_3_1.fcdex_ext.quest_logic import bump_quest
 
         await bump_quest(player, "pack_daily")
     ball_text = ", ".join(granted) if granted else "no clubball (dex cache empty)"

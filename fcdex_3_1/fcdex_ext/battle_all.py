@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fcdex_3_0.fcdex_ext.battle_engine import BattleBall, BattleInstance, gen_battle
+from fcdex_3_1.fcdex_ext.battle_engine import BattleBall, BattleInstance, gen_battle
 
 
 def run_full_roster_battle(p1: list[BattleBall], p2: list[BattleBall]) -> tuple[BattleInstance, list[str]]:

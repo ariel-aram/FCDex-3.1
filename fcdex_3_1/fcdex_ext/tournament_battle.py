@@ -7,14 +7,14 @@ import discord
 
 from ballsdex.core.discord import LayoutView
 from bd_models.models import Player
-from fcdex_3_0.fcdex_ext.battle_cog import ActiveBattle, _active_battles, fetch_battle
-from fcdex_3_0.fcdex_ext.views import BattleLayoutView
-from fcdex_3_0.models import Tournament, TournamentMatch
+from fcdex_3_1.fcdex_ext.battle_cog import ActiveBattle, _active_battles, fetch_battle
+from fcdex_3_1.fcdex_ext.views import BattleLayoutView
+from fcdex_3_1.models import Tournament, TournamentMatch
 
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
 
-log = logging.getLogger("fcdex_3_0.tournament.battle")
+log = logging.getLogger("fcdex_3_1.tournament.battle")
 
 
 async def resolve_guild_member(guild: discord.Guild, discord_id: int) -> discord.Member | None:

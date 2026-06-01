@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "fcdex-3-0"
-version = "2.0.0"
-description = "FCDex 3.1 — packs, craft/SBC, battles, tournaments, quests, and more for BallsDex V3"
+name = "fcdex-3-1"
+version = "2.1.0"
+description = "FCDex 3.1 — packs, craft/SBC, battles, tournaments, quests, shop, and more for BallsDex V3"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [
@@ -23,10 +23,10 @@ Issues = "https://github.com/ariel-aram/FCDex-3.0/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["fcdex_3_0*"]
+include = ["fcdex_3_1*"]
 
 [tool.setuptools.package-data]
-fcdex_3_0 = ["media/*"]
+fcdex_3_1 = ["media/*", "extra.toml"]
 
 [project.optional-dependencies]
 dev = [
@@ -58,7 +58,7 @@ select = ["E", "F", "I", "W"]
 ignore = ["E203"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["fcdex_3_0", "ballsdex", "bd_models", "settings"]
+known-first-party = ["fcdex_3_1", "ballsdex", "bd_models", "settings"]
 split-on-trailing-comma = false
 
 [tool.pyright]
@@ -72,7 +72,7 @@ typeCheckingMode = "basic"
 exclude = ["tests"]
 
 [[tool.pyright.executionEnvironments]]
-root = "fcdex_3_0/fcdex_ext"
+root = "fcdex_3_1/fcdex_ext"
 extraPaths = [".", ".vendor/ballsdex/admin_panel", ".vendor/ballsdex"]
 reportAttributeAccessIssue = false
 reportInvalidTypeForm = false

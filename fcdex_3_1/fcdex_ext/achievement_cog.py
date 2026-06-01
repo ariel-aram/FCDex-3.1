@@ -8,13 +8,13 @@ from discord import app_commands
 from discord.ext import commands
 
 from ballsdex.core.utils.transformers import TTLModelTransformer
-from fcdex_3_0.fcdex_ext.achievement_views import build_achievement_menu
-from fcdex_3_0.models import Achievement
+from fcdex_3_1.fcdex_ext.achievement_views import build_achievement_menu
+from fcdex_3_1.models import Achievement
 
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
 
-log = logging.getLogger("fcdex_3_0.achievement")
+log = logging.getLogger("fcdex_3_1.achievement")
 
 
 class AchievementTransformer(TTLModelTransformer[Achievement]):

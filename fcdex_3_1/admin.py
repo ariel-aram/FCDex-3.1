@@ -8,6 +8,9 @@ from .models import (
     PlayerQuestProgress,
     PlayerStats,
     SBCRecipe,
+    ShopBundle,
+    ShopBundleItem,
+    ShopPurchase,
     Tournament,
     TournamentBet,
     TournamentMatch,
@@ -134,6 +137,29 @@ class PlayerQuestProgressAdmin(admin.ModelAdmin):
     autocomplete_fields = ("player",)
     list_display = ("player", "quest_key", "day", "progress", "target", "completed_at", "claimed_at")
     list_filter = ("quest_key", "day")
+
+
+class ShopBundleItemInline(admin.TabularInline):
+    model = ShopBundleItem
+    autocomplete_fields = ("ball",)
+    extra = 1
+
+
+@admin.register(ShopBundle)
+class ShopBundleAdmin(admin.ModelAdmin):
+    inlines = (ShopBundleItemInline,)
+    list_display = ("name", "price", "enabled", "sort_order", "emoji")
+    list_filter = ("enabled",)
+    search_fields = ("name", "description")
+    ordering = ("sort_order", "name")
+
+
+@admin.register(ShopPurchase)
+class ShopPurchaseAdmin(admin.ModelAdmin):
+    autocomplete_fields = ("player", "bundle")
+    list_display = ("player", "bundle", "purchased_at")
+    list_filter = ("bundle",)
+    readonly_fields = ("purchased_at",)
 
 
 @admin.register(MergeLog)

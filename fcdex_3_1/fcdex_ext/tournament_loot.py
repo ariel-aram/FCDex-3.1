@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 
 from bd_models.models import Ball, BallInstance, Player
-from fcdex_3_0.models import TournamentMatch, TournamentMatchPrize, TournamentPrizeType
+from fcdex_3_1.models import TournamentMatch, TournamentMatchPrize, TournamentPrizeType
 
 
 async def _pick_random_common_ball() -> Ball | None:

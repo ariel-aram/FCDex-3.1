@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fcdex_3_0.fcdex_ext.merge_assets import MERGE_CARD_SIZE, merge_card_path, prepare_merge_background
+from fcdex_3_1.fcdex_ext.merge_assets import MERGE_CARD_SIZE, merge_card_path, prepare_merge_background
 
 
 def test_merge_card_asset_exists():

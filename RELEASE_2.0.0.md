@@ -17,6 +17,6 @@ Run migration **0008** after upgrade.
 ```toml
 [[ballsdex.packages]]
 location = "git+https://github.com/ariel-aram/FCDex-3.0.git@2.0.0"
-path = "fcdex_3_0"
+path = "fcdex_3_1"
 enabled = true
 ```

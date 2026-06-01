@@ -1,0 +1,11 @@
+# FCDex 3.1 package metadata for BallsDex V3 hosts.
+# Install via config/extra.toml (see README); this file documents runtime requirements.
+
+[ballsdex]
+minimum_version = "3.0.0"
+
+[economy]
+# Coin shop, packs, quests, tournaments, and SBC rewards use bd_models.Player.money.
+# APIs: Player.can_afford, Player.remove_money, Player.add_money
+enabled = true
+requires_core_packages = ["players", "trade"]

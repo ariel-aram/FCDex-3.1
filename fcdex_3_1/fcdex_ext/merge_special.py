@@ -8,12 +8,12 @@ from django.core.files.base import ContentFile
 from django.utils import timezone
 
 from bd_models.models import Special, specials
-from fcdex_3_0.fcdex_ext.merge_assets import MERGE_BACKGROUND_FILENAME, read_merge_card
+from fcdex_3_1.fcdex_ext.merge_assets import MERGE_BACKGROUND_FILENAME, read_merge_card
 
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
 
-log = logging.getLogger("fcdex_3_0.merge.special")
+log = logging.getLogger("fcdex_3_1.merge.special")
 
 MERGE_SPECIAL_NAME = "FCDex Merge"
 MERGE_SPECIAL_EMOJI = "✨"

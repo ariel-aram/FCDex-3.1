@@ -6,14 +6,14 @@ from typing import TYPE_CHECKING
 import discord
 from discord.ui import ActionRow, Button, button
 
-from fcdex_3_0.fcdex_ext.tournament_pairings import planned_group_stage_match_count
-from fcdex_3_0.fcdex_ext.tournament_schedule import start_blocked_reason
-from fcdex_3_0.models import Tournament, TournamentGroup, TournamentRegistration, TournamentStatus
+from fcdex_3_1.fcdex_ext.tournament_pairings import planned_group_stage_match_count
+from fcdex_3_1.fcdex_ext.tournament_schedule import start_blocked_reason
+from fcdex_3_1.models import Tournament, TournamentGroup, TournamentRegistration, TournamentStatus
 
 if TYPE_CHECKING:
     from discord import Interaction
 
-log = logging.getLogger("fcdex_3_0.tournament.host")
+log = logging.getLogger("fcdex_3_1.tournament.host")
 
 
 async def registration_counts_by_group(tournament: Tournament) -> dict[str, int]:
@@ -82,7 +82,7 @@ class TournamentStartGroupRow(ActionRow):
             )
             return
 
-        from fcdex_3_0.fcdex_ext.tournament_cog import run_tournament_start
+        from fcdex_3_1.fcdex_ext.tournament_cog import run_tournament_start
 
         tournament = await Tournament.objects.aget(pk=self.tournament_id)
         if error := await run_tournament_start(tournament):
@@ -96,11 +96,11 @@ class TournamentStartGroupRow(ActionRow):
         notice = f"▶ **{tournament.name}** group stage started — **{match_count}** match(es) created."
 
         if self.refresh == "match":
-            from fcdex_3_0.fcdex_ext.tournament_match_views import build_tournament_match_menu
+            from fcdex_3_1.fcdex_ext.tournament_match_views import build_tournament_match_menu
 
             layout = await build_tournament_match_menu(self.owner_id, self.tournament_id, notice=notice)
         else:
-            from fcdex_3_0.fcdex_ext.tournament_player_views import build_tournament_player_menu
+            from fcdex_3_1.fcdex_ext.tournament_player_views import build_tournament_player_menu
 
             layout = await build_tournament_player_menu(
                 self.owner_id, self.tournament_id, mode="overview", notice=notice

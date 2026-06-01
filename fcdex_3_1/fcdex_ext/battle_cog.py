@@ -11,18 +11,18 @@ from discord.ext import commands
 
 from ballsdex.core.utils.transformers import BallInstanceTransform
 from bd_models.models import BallInstance, Player
-from fcdex_3_0.fcdex_ext.battle_all import run_full_roster_battle, summarize_battle
-from fcdex_3_0.fcdex_ext.battle_engine import BattleBall, BattleInstance, gen_battle
-from fcdex_3_0.fcdex_ext.bd_helpers import format_instance, get_ball, instance_attack, instance_health
-from fcdex_3_0.fcdex_ext.quest_logic import bump_quest
-from fcdex_3_0.fcdex_ext.services import increment_stat
-from fcdex_3_0.fcdex_ext.views import BattleLayoutView, battle_log_file, build_battle_result_layout
+from fcdex_3_1.fcdex_ext.battle_all import run_full_roster_battle, summarize_battle
+from fcdex_3_1.fcdex_ext.battle_engine import BattleBall, BattleInstance, gen_battle
+from fcdex_3_1.fcdex_ext.bd_helpers import format_instance, get_ball, instance_attack, instance_health
+from fcdex_3_1.fcdex_ext.quest_logic import bump_quest
+from fcdex_3_1.fcdex_ext.services import increment_stat
+from fcdex_3_1.fcdex_ext.views import BattleLayoutView, battle_log_file, build_battle_result_layout
 from settings.models import settings
 
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
 
-log = logging.getLogger("fcdex_3_0.battle")
+log = logging.getLogger("fcdex_3_1.battle")
 
 _active_battles: list[ActiveBattle] = []
 
@@ -135,7 +135,7 @@ class ActiveBattle:
             await bump_quest(loser_player, "battle_play")
 
             if self.tournament_match_id is not None:
-                from fcdex_3_0.fcdex_ext.tournament_match import apply_verified_battle_result
+                from fcdex_3_1.fcdex_ext.tournament_match import apply_verified_battle_result
 
                 guild_id = interaction.guild_id if interaction.guild else None
                 ok, tournament_message = await apply_verified_battle_result(

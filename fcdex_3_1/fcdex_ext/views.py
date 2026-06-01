@@ -7,11 +7,11 @@ import discord
 from discord.ui import ActionRow, Button, Container, Separator, TextDisplay, button
 
 from ballsdex.core.discord import LayoutView
-from fcdex_3_0.fcdex_ext.battle_engine import BattleBall
+from fcdex_3_1.fcdex_ext.battle_engine import BattleBall
 from settings.models import settings
 
 if TYPE_CHECKING:
-    from fcdex_3_0.fcdex_ext.battle_cog import ActiveBattle
+    from fcdex_3_1.fcdex_ext.battle_cog import ActiveBattle
 
 TEXT_DISPLAY_LIMIT = 4000
 
@@ -60,7 +60,7 @@ class BattleLineupControls(ActionRow):
 
     @button(label="Random 5", style=discord.ButtonStyle.secondary, emoji="🎲")
     async def random_button(self, interaction: discord.Interaction, button: Button):
-        from fcdex_3_0.fcdex_ext.battle_cog import apply_lineup_mode, refresh_battle_message
+        from fcdex_3_1.fcdex_ext.battle_cog import apply_lineup_mode, refresh_battle_message
 
         if message := await apply_lineup_mode(self.battle, interaction, mode="all"):
             if message.startswith("Lineup set"):
@@ -74,7 +74,7 @@ class BattleLineupControls(ActionRow):
 
     @button(label="Strongest", style=discord.ButtonStyle.secondary, emoji="💪")
     async def best_button(self, interaction: discord.Interaction, button: Button):
-        from fcdex_3_0.fcdex_ext.battle_cog import apply_lineup_mode, refresh_battle_message
+        from fcdex_3_1.fcdex_ext.battle_cog import apply_lineup_mode, refresh_battle_message
 
         if message := await apply_lineup_mode(self.battle, interaction, mode="best"):
             if message.startswith("Lineup set"):
@@ -88,7 +88,7 @@ class BattleLineupControls(ActionRow):
 
     @button(label="Clear", style=discord.ButtonStyle.secondary, emoji="🗑️")
     async def clear_button(self, interaction: discord.Interaction, button: Button):
-        from fcdex_3_0.fcdex_ext.battle_cog import clear_lineup, refresh_battle_message
+        from fcdex_3_1.fcdex_ext.battle_cog import clear_lineup, refresh_battle_message
 
         if message := await clear_lineup(self.battle, interaction):
             if message == "Lineup cleared.":

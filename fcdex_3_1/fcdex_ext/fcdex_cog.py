@@ -8,24 +8,27 @@ from discord.ext import commands
 
 from ballsdex.core.utils.transformers import BallEnabledTransform, BallInstanceTransform
 from bd_models.models import Ball, BallInstance, Player, balls
-from fcdex_3_0.fcdex_ext.boss_logic import DEFAULT_BOSS_HP, run_boss_battle
-from fcdex_3_0.fcdex_ext.leaderboard_logic import (
+from fcdex_3_1.fcdex_ext.boss_logic import DEFAULT_BOSS_HP, run_boss_battle
+from fcdex_3_1.fcdex_ext.leaderboard_logic import (
     LeaderboardMetric,
     LeaderboardScope,
     normalize_metric_for_scope,
     resolve_scope,
 )
-from fcdex_3_0.fcdex_ext.leaderboard_views import build_leaderboard_layout
-from fcdex_3_0.fcdex_ext.quest_logic import DAILY_QUESTS, claim_quest, ensure_daily_quests
-from fcdex_3_0.fcdex_ext.rarity_views import (
+from fcdex_3_1.fcdex_ext.leaderboard_views import build_leaderboard_layout
+from fcdex_3_1.fcdex_ext.quest_logic import DAILY_QUESTS, claim_quest, ensure_daily_quests
+from fcdex_3_1.fcdex_ext.rarity_views import (
     CATEGORY_MODES,
     build_ball_rarity_layout,
     build_rarity_menu,
     build_rarity_value_layout,
 )
-from fcdex_3_0.fcdex_ext.regime_data import REGIMES, regime_by_key
-from fcdex_3_0.fcdex_ext.shiny_logic import ShinyError, convert_to_shiny
-from fcdex_3_0.fcdex_ext.views import build_panel_layout, truncate_text
+from fcdex_3_1.fcdex_ext.regime_data import REGIMES, regime_by_key
+from fcdex_3_1.fcdex_ext.shiny_logic import ShinyError, convert_to_shiny
+from fcdex_3_1.fcdex_ext.shop_logic import format_bundle_line_async, list_shop_bundles
+from fcdex_3_1.fcdex_ext.shop_views import build_shop_layout
+from fcdex_3_1.fcdex_ext.views import build_panel_layout
+from fcdex_3_1.models import ShopBundle, ShopBundleItem
 
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
@@ -33,6 +36,8 @@ if TYPE_CHECKING:
 
 class FcdexCog(commands.GroupCog, group_name="fcdex"):
     """FCDex 3.1 feature directory."""
+
+    shop_admin = app_commands.Group(name="shop-admin", description="Manage coin shop bundles (Manage Server)")
 
     def __init__(self, bot: BallsDexBot):
         self.bot = bot
@@ -52,9 +57,10 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
                 "### 🏟️ Tournaments\n`/tournament view` · `/tournament start` · `/tournament match` · `/tournament bet`",
                 "### ✨ Merge · 🏅 Achievements · 📊 Rarity · 🏆 Leaderboard",
                 "### 📋 List regime\n`/fcdex list regime:<name>` — browse clubballs by regime",
+                "### 🛒 Shop\n`/fcdex shop` · `/shop browse` — buy bundles with coins",
                 "### 👑 Boss · ✨ Shiny · 📜 Quests\n"
                 "`/fcdex boss` · `/fcdex shiny` · `/fcdex quests` · `/fcdex quest claim`",
-                "### 🛡️ Admin\n`/fcdex owners clubball:<card>` — who owns a rare card (Manage Server)",
+                "### 🛡️ Admin\n`/fcdex owners` · `/fcdex shop-admin` (Manage Server)",
             ],
             footer="-# Configure SBCs, achievements & tournaments in admin · FCDex 3.1",
         )
@@ -69,8 +75,13 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
     async def list_regime(self, interaction: discord.Interaction, regime: app_commands.Choice[str]):
         if regime.value == "all":
             lines = [f"**{r.label}** (`{r.key}`) — {r.description}" for r in REGIMES]
-            body = "\n".join(lines) + "\n\n-# Use `/fcdex list regime:<key>` for clubballs in one regime."
-            await interaction.response.send_message(truncate_text(body), ephemeral=True)
+            body = "\n".join(lines)
+            layout = build_panel_layout(
+                title="FCDex 3.1 · Regimes",
+                subtitle="Football league groupings",
+                sections=[body, "-# `/fcdex list regime:<key>` for clubballs in one regime"],
+            )
+            await interaction.response.send_message(view=layout, ephemeral=True)  # pyright: ignore[reportArgumentType]
             return
 
         entry = regime_by_key(regime.value)
@@ -97,7 +108,8 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
         )
         if missing:
             body += "\n\n-# Not in cache: " + ", ".join(missing)
-        await interaction.response.send_message(truncate_text(body), ephemeral=True)
+        layout = build_panel_layout(title=entry.label, subtitle=entry.description, sections=[body])
+        await interaction.response.send_message(view=layout, ephemeral=True)  # pyright: ignore[reportArgumentType]
 
     @app_commands.command(name="owners", description="List players who own a clubball (admin)")
     @app_commands.checks.has_permissions(manage_guild=True)
@@ -116,15 +128,18 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
         ):
             lines.append(f"• <@{inst.player.discord_id}> · card `#{inst.pk}`")
 
-        extra = f"\n-# Showing 25/{count} owners." if count > 25 else ""
-        await interaction.response.send_message(
-            truncate_text(f"### Owners of **{clubball.country}** ({count})\n" + "\n".join(lines) + extra),
-            ephemeral=True,
+        extra = f"-# Showing 25/{count} owners." if count > 25 else ""
+        layout = build_panel_layout(
+            title=f"Owners of {clubball.country}",
+            subtitle=f"{count} owner{'s' if count != 1 else ''}",
+            sections=["\n".join(lines)],
+            footer=extra,
         )
+        await interaction.response.send_message(view=layout, ephemeral=True)  # pyright: ignore[reportArgumentType]
 
     @app_commands.command(name="boss", description="Fight the raid boss with your strongest 5 clubballs")
     async def boss(self, interaction: discord.Interaction):
-        from fcdex_3_0.fcdex_ext.battle_cog import ball_instance_to_battle_ball
+        from fcdex_3_1.fcdex_ext.battle_cog import ball_instance_to_battle_ball
 
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
         instances = [x async for x in BallInstance.objects.filter(player=player, deleted=False)]
@@ -132,7 +147,7 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
             await interaction.response.send_message("You need clubballs to fight the boss.", ephemeral=True)
             return
 
-        from fcdex_3_0.fcdex_ext.bd_helpers import instance_attack, instance_health
+        from fcdex_3_1.fcdex_ext.bd_helpers import instance_attack, instance_health
 
         ranked: list[tuple[int, BallInstance]] = []
         for inst in instances:
@@ -150,10 +165,15 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
             f"**Raid boss** ({DEFAULT_BOSS_HP:,} HP)\n"
             f"{'🏆 You won!' if won else '💀 Boss wins.'} · Turns: **{instance.turns}**"
         )
+        sections = [summary]
         if not won:
-            tail = "\n".join(log[-5:])
-            summary += f"\n\n{tail}"
-        await interaction.response.send_message(truncate_text(summary))
+            sections.append("\n".join(log[-5:]))
+        layout = build_panel_layout(
+            title="FCDex 3.1 · Raid boss",
+            subtitle="Top 5 clubballs vs boss",
+            sections=sections,
+        )
+        await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]
 
     @app_commands.command(name="shiny", description="Convert 2 copies into one shiny (+25% ATK/HP)")
     @app_commands.describe(clubball="A copy of the clubball you want to make shiny")
@@ -165,7 +185,8 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
         except ShinyError as exc:
             await interaction.response.send_message(exc.message, ephemeral=True)
             return
-        await interaction.response.send_message(message)
+        layout = build_panel_layout(title="FCDex 3.1 · Shiny forge", sections=[message])
+        await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]
 
     @app_commands.command(name="quests", description="Daily quest progress")
     async def quests(self, interaction: discord.Interaction):
@@ -190,7 +211,11 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
         await ensure_daily_quests(player)
         ok, message = await claim_quest(player, key.value)
-        await interaction.response.send_message(message, ephemeral=not ok)
+        if ok:
+            layout = build_panel_layout(title="FCDex 3.1 · Quest claimed", sections=[message])
+            await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]
+        else:
+            await interaction.response.send_message(message, ephemeral=True)
 
     @app_commands.command(name="rarity", description="Live BallsDex spawn weights, rarity lookup, and clubball browse")
     @app_commands.describe(
@@ -284,3 +309,89 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
             await interaction.followup.send(view=layout)  # pyright: ignore[reportArgumentType]
         else:
             await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]
+
+    @app_commands.command(name="shop", description="Browse coin shop bundles and purchase rewards")
+    async def shop(self, interaction: discord.Interaction):
+        layout = await build_shop_layout(interaction.user.id)
+        await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]
+
+    @shop_admin.command(name="add", description="Create a new shop bundle")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.describe(
+        name="Bundle name",
+        price="Coin price",
+        description="Optional description",
+        emoji="Optional emoji",
+    )
+    async def shop_admin_add(
+        self,
+        interaction: discord.Interaction,
+        name: str,
+        price: app_commands.Range[int, 1, 10_000_000],
+        description: str = "",
+        emoji: str = "🛒",
+    ):
+        if await ShopBundle.objects.filter(name__iexact=name.strip()).aexists():
+            await interaction.response.send_message(f"A bundle named **{name}** already exists.", ephemeral=True)
+            return
+        bundle = await ShopBundle.objects.acreate(
+            name=name.strip(), price=price, description=description, emoji=emoji[:32] or "🛒"
+        )
+        await interaction.response.send_message(
+            f"Created bundle **{bundle.name}** (`#{bundle.pk}`) for **{bundle.price:,}** coins. "
+            f"Add items with `/fcdex shop-admin add-item`.",
+            ephemeral=True,
+        )
+
+    @shop_admin.command(name="add-item", description="Add a clubball reward to a bundle")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.describe(bundle="Bundle name", clubball="Clubball to grant", quantity="How many copies")
+    async def shop_admin_add_item(
+        self,
+        interaction: discord.Interaction,
+        bundle: str,
+        clubball: BallEnabledTransform,
+        quantity: app_commands.Range[int, 1, 25] = 1,
+    ):
+        try:
+            shop_bundle = await ShopBundle.objects.aget(name__iexact=bundle.strip())
+        except ShopBundle.DoesNotExist:
+            await interaction.response.send_message(f"No bundle named **{bundle}**.", ephemeral=True)
+            return
+        await ShopBundleItem.objects.acreate(bundle=shop_bundle, ball=clubball, quantity=quantity)
+        await interaction.response.send_message(
+            f"Added **{quantity}×** {clubball.country} to **{shop_bundle.name}**.", ephemeral=True
+        )
+
+    @shop_admin.command(name="list", description="List all shop bundles")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def shop_admin_list(self, interaction: discord.Interaction):
+        bundles = await list_shop_bundles(enabled_only=False)
+        if not bundles:
+            await interaction.response.send_message("No shop bundles yet.", ephemeral=True)
+            return
+        lines = [await format_bundle_line_async(b) + f"\n-# `#{b.pk}` · {'✅' if b.enabled else '🚫'}" for b in bundles]
+        layout = build_panel_layout(
+            title="FCDex 3.1 · Shop admin",
+            subtitle="All bundles",
+            sections=["\n\n".join(lines)],
+        )
+        await interaction.response.send_message(view=layout, ephemeral=True)  # pyright: ignore[reportArgumentType]
+
+    @shop_admin.command(name="enable", description="Enable a shop bundle")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def shop_admin_enable(self, interaction: discord.Interaction, bundle: str):
+        updated = await ShopBundle.objects.filter(name__iexact=bundle.strip()).aupdate(enabled=True)
+        if not updated:
+            await interaction.response.send_message(f"No bundle named **{bundle}**.", ephemeral=True)
+            return
+        await interaction.response.send_message(f"Enabled **{bundle}**.", ephemeral=True)
+
+    @shop_admin.command(name="disable", description="Disable a shop bundle")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def shop_admin_disable(self, interaction: discord.Interaction, bundle: str):
+        updated = await ShopBundle.objects.filter(name__iexact=bundle.strip()).aupdate(enabled=False)
+        if not updated:
+            await interaction.response.send_message(f"No bundle named **{bundle}**.", ephemeral=True)
+            return
+        await interaction.response.send_message(f"Disabled **{bundle}**.", ephemeral=True)

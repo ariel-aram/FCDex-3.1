@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from fcdex_3_0.fcdex_ext.merge_levels import MERGE_LEVELS, get_merge_level_config
+from fcdex_3_1.fcdex_ext.merge_levels import MERGE_LEVELS, get_merge_level_config
 
 
 def _preview_attack(base_attack: int, bonus: int) -> int:

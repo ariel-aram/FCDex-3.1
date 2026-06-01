@@ -9,13 +9,13 @@ from discord.ext import commands
 
 from ballsdex.core.utils.transformers import BallInstanceTransform
 from bd_models.models import Player
-from fcdex_3_0.fcdex_ext.merge_logic import MergeValidationError, validate_merge_batch
-from fcdex_3_0.fcdex_ext.merge_views import build_merge_confirm_view
+from fcdex_3_1.fcdex_ext.merge_logic import MergeValidationError, validate_merge_batch
+from fcdex_3_1.fcdex_ext.merge_views import build_merge_confirm_view
 
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
 
-log = logging.getLogger("fcdex_3_0.merge")
+log = logging.getLogger("fcdex_3_1.merge")
 
 
 def _collect_merge_cards(

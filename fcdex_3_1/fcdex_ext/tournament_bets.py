@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from bd_models.models import Player
-from fcdex_3_0.models import Tournament, TournamentBet, TournamentMatch
+from fcdex_3_1.models import Tournament, TournamentBet, TournamentMatch
 
 
 async def place_bet(

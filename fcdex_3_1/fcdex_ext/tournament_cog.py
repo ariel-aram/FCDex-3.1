@@ -11,15 +11,15 @@ from django.utils import timezone
 
 from ballsdex.core.utils.transformers import TTLModelTransformer
 from bd_models.models import Player
-from fcdex_3_0.fcdex_ext.services import increment_stat
-from fcdex_3_0.fcdex_ext.tournament_bets import place_bet
-from fcdex_3_0.fcdex_ext.tournament_bracket import create_semifinal_pairings, sync_bracket_for_status
-from fcdex_3_0.fcdex_ext.tournament_host import tournament_start_eligibility, viewer_can_start_group_stage
-from fcdex_3_0.fcdex_ext.tournament_match_views import build_tournament_match_menu
-from fcdex_3_0.fcdex_ext.tournament_player_views import build_tournament_player_menu
-from fcdex_3_0.fcdex_ext.tournament_schedule import past_end_reason
-from fcdex_3_0.fcdex_ext.tournament_views import TournamentManageView
-from fcdex_3_0.models import (
+from fcdex_3_1.fcdex_ext.services import increment_stat
+from fcdex_3_1.fcdex_ext.tournament_bets import place_bet
+from fcdex_3_1.fcdex_ext.tournament_bracket import create_semifinal_pairings, sync_bracket_for_status
+from fcdex_3_1.fcdex_ext.tournament_host import tournament_start_eligibility, viewer_can_start_group_stage
+from fcdex_3_1.fcdex_ext.tournament_match_views import build_tournament_match_menu
+from fcdex_3_1.fcdex_ext.tournament_player_views import build_tournament_player_menu
+from fcdex_3_1.fcdex_ext.tournament_schedule import past_end_reason
+from fcdex_3_1.fcdex_ext.tournament_views import TournamentManageView
+from fcdex_3_1.models import (
     Tournament,
     TournamentGroup,
     TournamentMatch,
@@ -31,7 +31,7 @@ from fcdex_3_0.models import (
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
 
-log = logging.getLogger("fcdex_3_0.tournament")
+log = logging.getLogger("fcdex_3_1.tournament")
 
 
 class TournamentTransformer(TTLModelTransformer[Tournament]):
@@ -81,8 +81,8 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
         if error := await run_tournament_start(tournament):
             await interaction.response.send_message(error, ephemeral=True)
             return
-        from fcdex_3_0.fcdex_ext.tournament_host import registration_counts_by_group
-        from fcdex_3_0.fcdex_ext.tournament_pairings import planned_group_stage_match_count
+        from fcdex_3_1.fcdex_ext.tournament_host import registration_counts_by_group
+        from fcdex_3_1.fcdex_ext.tournament_pairings import planned_group_stage_match_count
 
         counts = await registration_counts_by_group(tournament)
         match_count = planned_group_stage_match_count(
@@ -233,7 +233,7 @@ async def run_tournament_advance(tournament: Tournament) -> tuple[bool, str]:
         if await TournamentMatch.objects.filter(tournament=tournament, round=TournamentRound.FINAL).aexists():
             return False, "Grand final already exists."
 
-        from fcdex_3_0.fcdex_ext.tournament_bracket import create_final_pairing, semifinal_winner_for_group
+        from fcdex_3_1.fcdex_ext.tournament_bracket import create_final_pairing, semifinal_winner_for_group
 
         legacy_winner = await semifinal_winner_for_group(tournament, TournamentGroup.LEGACY.value)
         main_winner = await semifinal_winner_for_group(tournament, TournamentGroup.MAIN.value)

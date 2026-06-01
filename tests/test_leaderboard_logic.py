@@ -11,7 +11,7 @@ _bd_models.models = _bd_models_models
 sys.modules.setdefault("bd_models", _bd_models)
 sys.modules.setdefault("bd_models.models", _bd_models_models)
 
-from fcdex_3_0.fcdex_ext.leaderboard_logic import (  # noqa: E402
+from fcdex_3_1.fcdex_ext.leaderboard_logic import (  # noqa: E402
     ENTRIES_PER_PAGE,
     UNKNOWN_USER,
     LeaderboardEntry,

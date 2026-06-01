@@ -8,19 +8,19 @@ from discord.ui import ActionRow, Button, Container, Modal, Separator, TextDispl
 
 from ballsdex.core.discord import LayoutView
 from bd_models.models import Player
-from fcdex_3_0.fcdex_ext.tournament_schedule import (
+from fcdex_3_1.fcdex_ext.tournament_schedule import (
     format_for_input,
     parse_optional_datetime,
     parse_status,
     schedule_summary_lines,
 )
-from fcdex_3_0.fcdex_ext.views import build_tournament_layout, truncate_text
-from fcdex_3_0.models import Tournament, TournamentGroup, TournamentStatus
+from fcdex_3_1.fcdex_ext.views import build_tournament_layout, truncate_text
+from fcdex_3_1.models import Tournament, TournamentGroup, TournamentStatus
 
 if TYPE_CHECKING:
     from discord import Interaction
 
-log = logging.getLogger("fcdex_3_0.tournament.views")
+log = logging.getLogger("fcdex_3_1.tournament.views")
 
 ManageMode = Literal["edit", "delete", "announce", "host"]
 
@@ -162,7 +162,7 @@ class TournamentManageExtraRow(ActionRow):
         if not _require_manage_guild(interaction):
             await _deny_manage_guild(interaction)
             return
-        from fcdex_3_0.fcdex_ext.tournament_bounty_views import build_bounty_pick_view
+        from fcdex_3_1.fcdex_ext.tournament_bounty_views import build_bounty_pick_view
 
         view = await build_bounty_pick_view(self.owner_id)
         await interaction.response.edit_message(view=view)
@@ -525,9 +525,9 @@ class TournamentHostControls(ActionRow):
         if not _require_manage_guild(interaction):
             await _deny_manage_guild(interaction)
             return
-        from fcdex_3_0.fcdex_ext.tournament_cog import run_tournament_start
-        from fcdex_3_0.fcdex_ext.tournament_host import registration_counts_by_group
-        from fcdex_3_0.fcdex_ext.tournament_pairings import planned_group_stage_match_count
+        from fcdex_3_1.fcdex_ext.tournament_cog import run_tournament_start
+        from fcdex_3_1.fcdex_ext.tournament_host import registration_counts_by_group
+        from fcdex_3_1.fcdex_ext.tournament_pairings import planned_group_stage_match_count
 
         tournament = await Tournament.objects.aget(pk=self.tournament_id)
         if error := await run_tournament_start(tournament):
@@ -550,7 +550,7 @@ class TournamentHostControls(ActionRow):
         if not _require_manage_guild(interaction):
             await _deny_manage_guild(interaction)
             return
-        from fcdex_3_0.fcdex_ext.tournament_cog import run_tournament_advance
+        from fcdex_3_1.fcdex_ext.tournament_cog import run_tournament_advance
 
         tournament = await Tournament.objects.aget(pk=self.tournament_id)
         ok, message = await run_tournament_advance(tournament)
@@ -568,7 +568,7 @@ class TournamentHostControls(ActionRow):
         if not _require_manage_guild(interaction):
             await _deny_manage_guild(interaction)
             return
-        from fcdex_3_0.fcdex_ext.tournament_bracket import sync_bracket_for_status
+        from fcdex_3_1.fcdex_ext.tournament_bracket import sync_bracket_for_status
 
         tournament = await Tournament.objects.aget(pk=self.tournament_id)
         semis, final = await sync_bracket_for_status(tournament)

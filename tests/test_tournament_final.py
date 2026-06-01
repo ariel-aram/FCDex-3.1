@@ -18,16 +18,19 @@ if not settings.configured:
 
 
 def _load_bracket():
-    models_stub = ModuleType("fcdex_3_0.models")
-    models_stub.TournamentGroup = SimpleNamespace(LEGACY="legacy", MAIN="main")
+    models_stub = ModuleType("fcdex_3_1.models")
+    models_stub.TournamentGroup = SimpleNamespace(
+        LEGACY=SimpleNamespace(value="legacy"),
+        MAIN=SimpleNamespace(value="main"),
+    )
     models_stub.TournamentRound = SimpleNamespace(SEMIFINAL="semifinal", FINAL="final")
     models_stub.TournamentMatch = object
     models_stub.Tournament = object
     models_stub.TournamentRegistration = object
     models_stub.TournamentStatus = object
-    sys.modules["fcdex_3_0.models"] = models_stub
+    sys.modules["fcdex_3_1.models"] = models_stub
 
-    path = ROOT / "fcdex_3_0" / "fcdex_ext" / "tournament_bracket.py"
+    path = ROOT / "fcdex_3_1" / "fcdex_ext" / "tournament_bracket.py"
     spec = importlib.util.spec_from_file_location("fcdex_tournament_bracket_test", path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)

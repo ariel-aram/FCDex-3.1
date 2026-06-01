@@ -7,7 +7,7 @@ import discord
 from discord.ui import ActionRow, Button, Container, Modal, Separator, TextDisplay, TextInput, button
 
 from ballsdex.core.discord import LayoutView
-from fcdex_3_0.fcdex_ext.tournament_views import (
+from fcdex_3_1.fcdex_ext.tournament_views import (
     TournamentManageView,
     _deny_manage_guild,
     _deny_owner,
@@ -15,8 +15,8 @@ from fcdex_3_0.fcdex_ext.tournament_views import (
     _require_manage_guild,
     load_manageable_tournaments,
 )
-from fcdex_3_0.fcdex_ext.views import truncate_text
-from fcdex_3_0.models import (
+from fcdex_3_1.fcdex_ext.views import truncate_text
+from fcdex_3_1.models import (
     Tournament,
     TournamentGroup,
     TournamentMatch,
@@ -28,7 +28,7 @@ from fcdex_3_0.models import (
 if TYPE_CHECKING:
     from discord import Interaction
 
-log = logging.getLogger("fcdex_3_0.tournament.bounty")
+log = logging.getLogger("fcdex_3_1.tournament.bounty")
 
 BountyBackTarget = Literal["manage", "hub"]
 

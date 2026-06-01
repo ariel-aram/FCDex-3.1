@@ -7,9 +7,9 @@ from discord import app_commands
 from discord.ext import commands
 
 from bd_models.models import Player
-from fcdex_3_0.fcdex_ext.craft_logic import CraftError, complete_sbc
-from fcdex_3_0.fcdex_ext.views import build_panel_layout
-from fcdex_3_0.models import SBCRecipe
+from fcdex_3_1.fcdex_ext.craft_logic import CraftError, complete_sbc
+from fcdex_3_1.fcdex_ext.views import build_panel_layout
+from fcdex_3_1.models import SBCRecipe
 
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
@@ -57,4 +57,5 @@ class CraftCog(commands.GroupCog, group_name="craft"):
         except CraftError as exc:
             await interaction.response.send_message(exc.message, ephemeral=True)
             return
-        await interaction.response.send_message(message)
+        layout = build_panel_layout(title="FCDex 3.1 · SBC complete", sections=[message])
+        await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]

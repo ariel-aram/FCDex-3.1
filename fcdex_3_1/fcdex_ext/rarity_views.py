@@ -7,8 +7,8 @@ import discord
 from discord.ui import ActionRow, Button, Container, Separator, TextDisplay, button
 
 from ballsdex.core.discord import LayoutView
-from fcdex_3_0.fcdex_ext.rarity_data import RarityCategory, format_rarity_value
-from fcdex_3_0.fcdex_ext.rarity_logic import (
+from fcdex_3_1.fcdex_ext.rarity_data import RarityCategory, format_rarity_value
+from fcdex_3_1.fcdex_ext.rarity_logic import (
     balls_at_rarity,
     build_category_overview,
     build_spawnable_overview,
@@ -17,14 +17,14 @@ from fcdex_3_0.fcdex_ext.rarity_logic import (
     format_ball_line,
     rarity_distribution,
 )
-from fcdex_3_0.fcdex_ext.views import truncate_text
+from fcdex_3_1.fcdex_ext.views import truncate_text
 
 if TYPE_CHECKING:
     from discord import Interaction
 
     from bd_models.models import Ball
 
-log = logging.getLogger("fcdex_3_0.rarity.views")
+log = logging.getLogger("fcdex_3_1.rarity.views")
 
 CATEGORY_MODES: dict[str, RarityCategory] = {
     "spawnable": RarityCategory.SPAWNABLE,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from bd_models.models import BallInstance, Player
-from fcdex_3_0.models import SBCRecipe
+from fcdex_3_1.models import SBCRecipe
 
 
 class CraftError(Exception):

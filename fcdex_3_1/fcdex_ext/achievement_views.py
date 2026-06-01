@@ -8,20 +8,20 @@ from discord.ui import ActionRow, Button, Container, Separator, TextDisplay, but
 
 from ballsdex.core.discord import LayoutView
 from bd_models.models import Player
-from fcdex_3_0.fcdex_ext.services import (
+from fcdex_3_1.fcdex_ext.services import (
     achievement_is_complete,
     check_achievements,
     claim_achievement,
     format_achievement_progress,
     get_or_create_stats,
 )
-from fcdex_3_0.fcdex_ext.views import truncate_text
-from fcdex_3_0.models import Achievement, PlayerAchievement
+from fcdex_3_1.fcdex_ext.views import truncate_text
+from fcdex_3_1.models import Achievement, PlayerAchievement
 
 if TYPE_CHECKING:
     from discord import Interaction
 
-log = logging.getLogger("fcdex_3_0.achievement.views")
+log = logging.getLogger("fcdex_3_1.achievement.views")
 
 
 async def build_catalog_body() -> str:

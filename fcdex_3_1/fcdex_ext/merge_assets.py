@@ -5,14 +5,14 @@ import logging
 from importlib.resources import files
 from pathlib import Path
 
-log = logging.getLogger("fcdex_3_0.merge.assets")
+log = logging.getLogger("fcdex_3_1.merge.assets")
 
 MERGE_CARD_SIZE = (1428, 2000)
 MERGE_BACKGROUND_FILENAME = "fcdex_merge_background.png"
 
 
 def merge_card_path() -> Path:
-    return Path(str(files("fcdex_3_0").joinpath("media/merge.jpg")))
+    return Path(str(files("fcdex_3_1").joinpath("media/merge.jpg")))
 
 
 def prepare_merge_background(raw: bytes) -> bytes:

@@ -3,9 +3,9 @@ from __future__ import annotations
 from django.utils import timezone
 
 from bd_models.models import Player
-from fcdex_3_0.fcdex_ext.tournament_bets import resolve_bets_for_match
-from fcdex_3_0.fcdex_ext.tournament_loot import grant_match_loot, load_match_prizes
-from fcdex_3_0.models import (
+from fcdex_3_1.fcdex_ext.tournament_bets import resolve_bets_for_match
+from fcdex_3_1.fcdex_ext.tournament_loot import grant_match_loot, load_match_prizes
+from fcdex_3_1.models import (
     Tournament,
     TournamentGroup,
     TournamentMatch,

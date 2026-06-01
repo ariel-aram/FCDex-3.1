@@ -8,21 +8,21 @@ from discord.ui import ActionRow, Button, Container, Separator, TextDisplay, but
 
 from ballsdex.core.discord import LayoutView
 from bd_models.models import Player
-from fcdex_3_0.fcdex_ext.services import increment_stat
-from fcdex_3_0.fcdex_ext.tournament_match_views import build_bracket_sections
-from fcdex_3_0.fcdex_ext.tournament_schedule import (
+from fcdex_3_1.fcdex_ext.services import increment_stat
+from fcdex_3_1.fcdex_ext.tournament_match_views import build_bracket_sections
+from fcdex_3_1.fcdex_ext.tournament_schedule import (
     registration_closed_reason,
     registration_is_open,
     registration_status_label,
     schedule_summary_lines,
 )
-from fcdex_3_0.fcdex_ext.views import truncate_text
-from fcdex_3_0.models import Tournament, TournamentGroup, TournamentRegistration
+from fcdex_3_1.fcdex_ext.views import truncate_text
+from fcdex_3_1.models import Tournament, TournamentGroup, TournamentRegistration
 
 if TYPE_CHECKING:
     from discord import Interaction
 
-log = logging.getLogger("fcdex_3_0.tournament.player_views")
+log = logging.getLogger("fcdex_3_1.tournament.player_views")
 
 
 async def build_overview_sections(tournament: Tournament, viewer_id: int | None = None) -> list[str]:
@@ -260,7 +260,7 @@ async def build_tournament_player_menu(
                 "(or use `/tournament start`)."
             )
         )
-        from fcdex_3_0.fcdex_ext.tournament_host import TournamentStartGroupRow
+        from fcdex_3_1.fcdex_ext.tournament_host import TournamentStartGroupRow
 
         container.add_item(TournamentStartGroupRow(owner_id, tournament_id, refresh="player"))
 

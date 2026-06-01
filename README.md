@@ -1,6 +1,6 @@
 # FCDex 3.1 — BallsDex V3 Extra Package
 
-Official **FCDex 3.1** feature pack for [BallsDex V3](https://github.com/Ballsdex-Team/BallsDex-DiscordBot). Packs, SBC crafting, battles, tournaments, quests, shiny conversion, boss raids, and more — Components v2 UI.
+Official **FCDex 3.1** feature pack for [BallsDex V3](https://github.com/Ballsdex-Team/BallsDex-DiscordBot). Packs, SBC crafting, coin shop, battles, tournaments, quests, shiny conversion, boss raids, and more — Components v2 UI.
 
 Use `/fcdex menu` for the full command directory.
 
@@ -13,6 +13,18 @@ Use `/fcdex menu` for the full command directory.
 | `/pack daily` | Daily pack — coins + clubball (24h cooldown) |
 | `/pack weekly` | Weekly pack — better rewards (7d cooldown) |
 | `/pack mascot` | Mascot pack (7d cooldown) |
+
+### 🛒 Shop
+
+Buy admin-configured bundles with **Player coin balance** (BallsDex V3 economy).
+
+| Command | Description |
+| ------- | ----------- |
+| `/fcdex shop` | Browse bundles · purchase via select menu |
+| `/shop browse` | Same shop panel (standalone group) |
+| `/fcdex shop-admin` | Create bundles, add items, enable/disable (Manage Server) |
+
+Configure bundles in the admin panel under **FCDex 3.1 → Shop bundles**.
 
 ### 🧪 Craft (SBC)
 
@@ -65,15 +77,16 @@ Legacy & Main groups · grand final is **Legacy vs Main** semifinal winners.
 | Command | Description |
 | ------- | ----------- |
 | `/fcdex owners clubball:<card>` | Who owns a rare card (Manage Server) |
+| `/fcdex shop-admin` | Manage coin shop bundles (Manage Server) |
 
-Configure **SBC recipes**, achievements, and tournaments in the admin panel under **FCDex 3.1**.
+Configure **SBC recipes**, **shop bundles**, achievements, and tournaments in the admin panel under **FCDex 3.1**.
 
 ## Installation
 
 ```toml
 [[ballsdex.packages]]
-location = "git+https://github.com/ariel-aram/FCDex-3.0.git@2.0.0"
-path = "fcdex_3_0"
+location = "git+https://github.com/ariel-aram/FCDex-3.0.git@2.1.0"
+path = "fcdex_3_1"
 enabled = true
 ```
 
@@ -81,12 +94,22 @@ enabled = true
 docker compose build && docker compose up -d
 ```
 
-Apply migrations through **`0008`** when upgrading (packs, SBC, quests).
+### Upgrading from FCDex 3.0 (`fcdex_3_0`)
+
+- Change `path` to **`fcdex_3_1`** and pin **`@2.1.0`** (see snippet above).
+- Rebuild/restart so migrations run through **`0009`** (shop bundles).
+- The Django app **label stays `fcdex_3_0`** for database compatibility — no `django_migrations` rename needed.
+- Existing tournament/achievement/pack data is preserved.
+
+### Fresh installs
+
+Use `path = "fcdex_3_1"` as shown. Economy uses core `bd_models.Player` (`money`, `add_money`, `remove_money`).
 
 ## Requirements
 
 - BallsDex **V3** (3.0.0+)
 - Python **3.12+**
+- Core **`players`** package loaded (coin balance — default in BallsDex V3)
 
 ## License
 

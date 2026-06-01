@@ -7,7 +7,7 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any, cast
 
-from fcdex_3_0.fcdex_ext.rarity_data import RarityCategory, format_rarity_value, normalize_rarity_name
+from fcdex_3_1.fcdex_ext.rarity_data import RarityCategory, format_rarity_value, normalize_rarity_name
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -48,13 +48,13 @@ def _load_rarity_logic() -> tuple[_RarityLogicTestModule, dict[str, object | Non
 
     saved: dict[str, object | None] = {
         name: sys.modules.get(name)
-        for name in ("bd_models", "bd_models.models", "fcdex_3_0.fcdex_ext.rarity_logic")
+        for name in ("bd_models", "bd_models.models", "fcdex_3_1.fcdex_ext.rarity_logic")
     }
     sys.modules["bd_models"] = bd_models
     sys.modules["bd_models.models"] = bd_models_models
-    sys.modules.pop("fcdex_3_0.fcdex_ext.rarity_logic", None)
+    sys.modules.pop("fcdex_3_1.fcdex_ext.rarity_logic", None)
 
-    path = ROOT / "fcdex_3_0" / "fcdex_ext" / "rarity_logic.py"
+    path = ROOT / "fcdex_3_1" / "fcdex_ext" / "rarity_logic.py"
     spec = importlib.util.spec_from_file_location("fcdex_rarity_logic_test", path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)

@@ -4,7 +4,7 @@ import itertools
 
 import pytest
 
-from fcdex_3_0.fcdex_ext.tournament_pairings import planned_group_stage_match_count
+from fcdex_3_1.fcdex_ext.tournament_pairings import planned_group_stage_match_count
 
 
 def _group_stage_match_count(player_count: int) -> int:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.utils import timezone
 
 from bd_models.models import Ball, BallInstance, Player
-from fcdex_3_0.models import Achievement, AchievementType, PlayerAchievement, PlayerStats
+from fcdex_3_1.models import Achievement, AchievementType, PlayerAchievement, PlayerStats
 
 
 async def get_or_create_stats(player: Player) -> PlayerStats:

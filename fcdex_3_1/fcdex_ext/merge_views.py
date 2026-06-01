@@ -8,25 +8,25 @@ from discord.ui import ActionRow, Button, Container, Separator, TextDisplay, but
 
 from ballsdex.core.discord import LayoutView
 from bd_models.models import BallInstance, Player
-from fcdex_3_0.fcdex_ext.bd_helpers import format_instance, get_ball
-from fcdex_3_0.fcdex_ext.merge_levels import MAX_MERGE_LEVEL, format_level_table_row, get_merge_level_config
-from fcdex_3_0.fcdex_ext.merge_limits import MERGE_WEEKLY_LIMIT
-from fcdex_3_0.fcdex_ext.merge_logic import (
+from fcdex_3_1.fcdex_ext.bd_helpers import format_instance, get_ball
+from fcdex_3_1.fcdex_ext.merge_levels import MAX_MERGE_LEVEL, format_level_table_row, get_merge_level_config
+from fcdex_3_1.fcdex_ext.merge_limits import MERGE_WEEKLY_LIMIT
+from fcdex_3_1.fcdex_ext.merge_logic import (
     MergeValidationError,
     count_player_merges_this_week,
     execute_merge,
     preview_merge_stats,
     validate_merge_batch,
 )
-from fcdex_3_0.fcdex_ext.merge_special import MERGE_SPECIAL_NAME, get_merge_special
-from fcdex_3_0.fcdex_ext.views import truncate_text
+from fcdex_3_1.fcdex_ext.merge_special import MERGE_SPECIAL_NAME, get_merge_special
+from fcdex_3_1.fcdex_ext.views import truncate_text
 
 if TYPE_CHECKING:
     from discord import Interaction
 
     from ballsdex.core.bot import BallsDexBot
 
-log = logging.getLogger("fcdex_3_0.merge.views")
+log = logging.getLogger("fcdex_3_1.merge.views")
 
 
 class MergeConfirmRow(ActionRow):

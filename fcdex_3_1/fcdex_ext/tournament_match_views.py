@@ -8,11 +8,11 @@ from discord.ui import ActionRow, Button, Container, Separator, TextDisplay, but
 
 from ballsdex.core.discord import LayoutView
 from bd_models.models import Player
-from fcdex_3_0.fcdex_ext.tournament_bracket import explain_no_matches
-from fcdex_3_0.fcdex_ext.tournament_loot import load_match_prizes
-from fcdex_3_0.fcdex_ext.tournament_match import claim_match_victory, list_pending_matches
-from fcdex_3_0.fcdex_ext.views import truncate_text
-from fcdex_3_0.models import (
+from fcdex_3_1.fcdex_ext.tournament_bracket import explain_no_matches
+from fcdex_3_1.fcdex_ext.tournament_loot import load_match_prizes
+from fcdex_3_1.fcdex_ext.tournament_match import claim_match_victory, list_pending_matches
+from fcdex_3_1.fcdex_ext.views import truncate_text
+from fcdex_3_1.models import (
     Tournament,
     TournamentGroup,
     TournamentMatch,
@@ -24,7 +24,7 @@ from fcdex_3_0.models import (
 if TYPE_CHECKING:
     from discord import Interaction
 
-log = logging.getLogger("fcdex_3_0.tournament.match_views")
+log = logging.getLogger("fcdex_3_1.tournament.match_views")
 
 ROUND_LABELS = {
     TournamentRound.GROUP: "Group stage",
@@ -214,7 +214,7 @@ class TournamentMatchBattleRow(ActionRow):
         from typing import cast
 
         from ballsdex.core.bot import BallsDexBot
-        from fcdex_3_0.fcdex_ext.tournament_battle import start_tournament_match_battle
+        from fcdex_3_1.fcdex_ext.tournament_battle import start_tournament_match_battle
 
         if self.menu.selected_match_id not in {m.pk for m in self.menu.pending}:
             await interaction.response.send_message(
@@ -294,7 +294,7 @@ class TournamentMatchMenuLayout(LayoutView):
                     "-# **Manage Server** required · creates matches for groups with **≥2** players."
                 )
             )
-            from fcdex_3_0.fcdex_ext.tournament_host import TournamentStartGroupRow
+            from fcdex_3_1.fcdex_ext.tournament_host import TournamentStartGroupRow
 
             container.add_item(TournamentStartGroupRow(owner_id, tournament_id, refresh="match"))
         if pending:

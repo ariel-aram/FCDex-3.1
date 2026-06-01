@@ -13,14 +13,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from fcdex_3_0.fcdex_ext.merge_levels import (
+from fcdex_3_1.fcdex_ext.merge_levels import (
     MAX_MERGE_LEVEL,
     MERGE_LEVELS,
     detect_target_level,
     get_merge_level_config,
     resolve_merge_level_from_bonuses,
 )
-from fcdex_3_0.fcdex_ext.merge_limits import (
+from fcdex_3_1.fcdex_ext.merge_limits import (
     MERGE_WEEKLY_LIMIT,
     calendar_week_bounds,
     merge_special_blocked_message,
@@ -175,10 +175,10 @@ def _load_merge_logic_for_validation_tests():
     merge_log_filter.acount = AsyncMock(return_value=0)
     merge_log_filter.aexists = AsyncMock(return_value=False)
     merge_log_manager.filter.return_value = merge_log_filter
-    fcdex_models = _FcdexModelsMergeStub("fcdex_3_0.models")
+    fcdex_models = _FcdexModelsMergeStub("fcdex_3_1.models")
     fcdex_models.MergeLog = SimpleNamespace(objects=merge_log_manager)
 
-    bd_helpers = _BdHelpersStub("fcdex_3_0.fcdex_ext.bd_helpers")
+    bd_helpers = _BdHelpersStub("fcdex_3_1.fcdex_ext.bd_helpers")
     bd_helpers.format_instance = AsyncMock(return_value="label")
     bd_helpers.get_ball = AsyncMock(
         return_value=SimpleNamespace(pk=1, rarity=10, attack=100, health=80, country="Test Club")
@@ -186,7 +186,7 @@ def _load_merge_logic_for_validation_tests():
     bd_helpers.instance_attack = lambda instance, ball: ball.attack
     bd_helpers.instance_health = lambda instance, ball: ball.health
 
-    services = _ServicesStub("fcdex_3_0.fcdex_ext.services")
+    services = _ServicesStub("fcdex_3_1.fcdex_ext.services")
     services.increment_stat = AsyncMock()
 
     stubs: dict[str, ModuleType] = {
@@ -195,10 +195,10 @@ def _load_merge_logic_for_validation_tests():
         "settings": settings_mod,
         "settings.models": settings_models,
         "discord": discord_mod,
-        "fcdex_3_0.models": fcdex_models,
-        "fcdex_3_0.fcdex_ext.bd_helpers": bd_helpers,
-        "fcdex_3_0.fcdex_ext.services": services,
-        "fcdex_3_0.fcdex_ext.merge_levels": importlib.import_module("fcdex_3_0.fcdex_ext.merge_levels"),
+        "fcdex_3_1.models": fcdex_models,
+        "fcdex_3_1.fcdex_ext.bd_helpers": bd_helpers,
+        "fcdex_3_1.fcdex_ext.services": services,
+        "fcdex_3_1.fcdex_ext.merge_levels": importlib.import_module("fcdex_3_1.fcdex_ext.merge_levels"),
     }
 
     saved: dict[str, ModuleType | None] = {}
@@ -206,7 +206,7 @@ def _load_merge_logic_for_validation_tests():
         saved[name] = sys.modules.get(name)
         sys.modules[name] = module
 
-    path = ROOT / "fcdex_3_0" / "fcdex_ext" / "merge_logic.py"
+    path = ROOT / "fcdex_3_1" / "fcdex_ext" / "merge_logic.py"
     spec = importlib.util.spec_from_file_location("fcdex_merge_logic_test", path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)

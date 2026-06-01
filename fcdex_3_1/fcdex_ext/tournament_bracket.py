@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from bd_models.models import Player
-from fcdex_3_0.models import (
+from fcdex_3_1.models import (
     Tournament,
     TournamentGroup,
     TournamentMatch,
@@ -97,7 +97,7 @@ async def explain_no_matches(tournament: Tournament, player: Player) -> str:
         )
 
     if status == TournamentStatus.REGISTRATION:
-        from fcdex_3_0.fcdex_ext.tournament_host import registration_counts_by_group, tournament_start_eligibility
+        from fcdex_3_1.fcdex_ext.tournament_host import registration_counts_by_group, tournament_start_eligibility
 
         eligible, blocker = await tournament_start_eligibility(tournament)
         counts = await registration_counts_by_group(tournament)
@@ -120,7 +120,7 @@ async def explain_no_matches(tournament: Tournament, player: Player) -> str:
         )
 
     if status == TournamentStatus.GROUP_STAGE:
-        from fcdex_3_0.fcdex_ext.tournament_match import list_open_group_matches_in_group
+        from fcdex_3_1.fcdex_ext.tournament_match import list_open_group_matches_in_group
 
         remaining = await list_open_group_matches_in_group(tournament, reg.group)
         if remaining:
