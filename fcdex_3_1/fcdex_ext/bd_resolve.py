@@ -7,10 +7,71 @@ import discord
 from bd_models.models import Ball, BallInstance, Player
 
 _MENTION_RE = re.compile(r"^<@!?(\d+)>$")
+_USER_DISCRIMINATOR_RE = re.compile(r"^(.+)#(\d{1,4})$")
+
+PLAYER_NOT_FOUND_MESSAGE = "Player not found — use @mention, server username, or numeric Discord user ID."
 
 
 def _normalize_token(value: str) -> str:
     return value.strip().lstrip("#")
+
+
+def _parse_username_discriminator(value: str) -> tuple[str, str | None]:
+    """Return (username, discriminator) with discriminator None if not a legacy tag."""
+    text = value.strip().lstrip("@")
+    match = _USER_DISCRIMINATOR_RE.match(text)
+    if match:
+        return match.group(1), match.group(2)
+    return text, None
+
+
+def _member_name_keys(member: discord.Member) -> set[str]:
+    names = {member.name.lower(), member.display_name.lower()}
+    if member.global_name:
+        names.add(member.global_name.lower())
+    nick = getattr(member, "nick", None)
+    if nick:
+        names.add(nick.lower())
+    return names
+
+
+def _member_matches_token(member: discord.Member, name_lower: str, discriminator: str | None) -> bool:
+    if discriminator is not None:
+        if member.name.lower() != name_lower:
+            return False
+        member_disc = member.discriminator
+        if member_disc == "0" and discriminator == "0":
+            return True
+        return member_disc == discriminator
+    return name_lower in _member_name_keys(member)
+
+
+async def _player_for_discord_id(discord_id: int) -> Player | None:
+    return await Player.objects.filter(discord_id=discord_id).afirst()
+
+
+async def _resolve_guild_member(guild: discord.Guild, raw: str) -> discord.Member | None:
+    search = raw.strip().lstrip("@")
+    if not search:
+        return None
+    name_part, disc_part = _parse_username_discriminator(search)
+    name_lower = name_part.lower()
+
+    for member in guild.members:
+        if _member_matches_token(member, name_lower, disc_part):
+            return member
+
+    query = name_part if disc_part is not None else search
+    if not query:
+        return None
+    try:
+        members = await guild.query_members(query=query, limit=15)
+    except (discord.HTTPException, discord.Forbidden, AttributeError):
+        members = []
+    for member in members:
+        if _member_matches_token(member, name_lower, disc_part):
+            return member
+    return None
 
 
 async def resolve_ball_input(value: str) -> Ball | None:
@@ -87,19 +148,26 @@ async def resolve_player_input(value: str, *, guild: discord.Guild | None = None
 
     if token.isdigit():
         discord_id = int(token)
-        player = await Player.objects.filter(discord_id=discord_id).afirst()
+        player = await _player_for_discord_id(discord_id)
         if player is not None:
             return player
         if len(token) < 17:
-            return await Player.objects.filter(pk=discord_id).afirst()
+            player = await Player.objects.filter(pk=discord_id).afirst()
+            if player is not None:
+                return player
+        if guild is not None and mention is not None:
+            member = guild.get_member(discord_id)
+            if member is None:
+                try:
+                    member = await guild.fetch_member(discord_id)
+                except (discord.HTTPException, discord.NotFound):
+                    member = None
+            if member is not None:
+                return await _player_for_discord_id(member.id)
 
     if guild is not None:
-        lowered = raw.lower().lstrip("@")
-        for member in guild.members:
-            names = {member.name.lower(), member.display_name.lower()}
-            if member.global_name:
-                names.add(member.global_name.lower())
-            if lowered in names:
-                return await Player.objects.filter(discord_id=member.id).afirst()
+        member = await _resolve_guild_member(guild, raw)
+        if member is not None:
+            return await _player_for_discord_id(member.id)
 
     return None

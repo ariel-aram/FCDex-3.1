@@ -43,7 +43,8 @@ class Migration(migrations.Migration):
                     models.PositiveIntegerField(
                         blank=True,
                         help_text=(
-                            "Replace global cap for this player (premium bonus still applies unless you set cap only)."
+                            "Replace global cap for this player "
+                            "(premium bonus still applies unless you set cap only)."
                         ),
                         null=True,
                     ),

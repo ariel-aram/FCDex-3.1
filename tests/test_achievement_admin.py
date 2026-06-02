@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from fcdex_3_1.fcdex_ext.achievement_admin_util import _TYPE_VALUES, normalize_achievement_type, parse_bool_field
+from fcdex_3_1.fcdex_ext.achievement_admin_util import (
+    _TYPE_VALUES,
+    normalize_achievement_type,
+    parse_bool_field,
+)
 
 
 def test_normalize_type_accepts_aliases() -> None:

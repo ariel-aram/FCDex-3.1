@@ -7,7 +7,7 @@ import discord
 from discord.ui import ActionRow, Button, Container, Modal, Separator, TextDisplay, TextInput, button
 
 from ballsdex.core.discord import LayoutView
-from fcdex_3_1.fcdex_ext.bd_resolve import resolve_player_input
+from fcdex_3_1.fcdex_ext.bd_resolve import PLAYER_NOT_FOUND_MESSAGE, resolve_player_input
 from fcdex_3_1.fcdex_ext.interaction_context import AdminContext, admin_context
 from fcdex_3_1.fcdex_ext.merge_quota import (
     format_quota_status_block,
@@ -80,9 +80,7 @@ class GrantPremiumQuotaModal(Modal, title="Grant premium merge quota"):
             return
         resolved = await resolve_player_input(self.player.value, guild=interaction.guild)
         if resolved is None:
-            await interaction.response.send_message(
-                "Player not found. Use their numeric **Discord ID** or a name visible in this server.", ephemeral=True
-            )
+            await interaction.response.send_message(PLAYER_NOT_FOUND_MESSAGE, ephemeral=True)
             return
         await PlayerMergeQuota.objects.aupdate_or_create(player=resolved, defaults={"premium_bonus": bonus})
         ctx = admin_context(interaction)
@@ -110,7 +108,7 @@ class SetPlayerCapOverrideModal(Modal, title="Player merge cap override"):
             return
         resolved = await resolve_player_input(self.player.value, guild=interaction.guild)
         if resolved is None:
-            await interaction.response.send_message("Player not found.", ephemeral=True)
+            await interaction.response.send_message(PLAYER_NOT_FOUND_MESSAGE, ephemeral=True)
             return
         raw_cap = (self.cap_override.value or "").strip()
         cap_value: int | None
@@ -148,7 +146,7 @@ class LookupPlayerQuotaModal(Modal, title="View player merge quota"):
             return
         resolved = await resolve_player_input(self.player.value, guild=interaction.guild)
         if resolved is None:
-            await interaction.response.send_message("Player not found.", ephemeral=True)
+            await interaction.response.send_message(PLAYER_NOT_FOUND_MESSAGE, ephemeral=True)
             return
         settings = await get_merge_quota_settings()
         snapshot = await get_merge_quota_snapshot(resolved)

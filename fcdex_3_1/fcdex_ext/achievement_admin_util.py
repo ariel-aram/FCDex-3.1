@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-_TYPE_VALUES = frozenset({"battles_won", "merges", "tournament_win", "tournament_participate", "balls_owned", "custom"})
+_TYPE_VALUES = frozenset(
+    {
+        "battles_won",
+        "merges",
+        "tournament_win",
+        "tournament_participate",
+        "balls_owned",
+        "custom",
+    }
+)
 
 _TYPE_LABELS = {
     "battles_won": "Battles Won",
