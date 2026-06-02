@@ -13,6 +13,35 @@ def _make_raid(**kwargs) -> BossRaid:
     return BossRaid(**defaults)
 
 
+def _make_card(*, pk: int = 7, attack: int = 50, health: int = 50):
+    ball = MagicMock()
+    ball.country = "Testland"
+    ball.attack = attack
+    ball.health = health
+    inst = MagicMock()
+    inst.pk = pk
+    inst.ball = ball
+    return inst, ball
+
+
+def _make_boss_ball(*, attack: int = 10, health: int = 10):
+    boss = MagicMock()
+    boss.attack = attack
+    boss.health = health
+    return boss
+
+
+def _resolve_with_mocks(raid: BossRaid, *, inst, boss_ball):
+    inst_qs = MagicMock()
+    inst_qs.aget = AsyncMock(return_value=inst)
+    inst_objects = MagicMock()
+    inst_objects.select_related.return_value = inst_qs
+    ball_objects = MagicMock()
+    ball_objects.aget = AsyncMock(return_value=boss_ball)
+    with patch.object(boss_raid.BallInstance, "objects", inst_objects), patch.object(boss_raid.Ball, "objects", ball_objects):
+        return asyncio.run(boss_raid.resolve_round(raid))
+
+
 def test_join_during_join_and_pick_not_after_resolve():
     raid = _make_raid(phase="pick")
     ok, _ = boss_raid.join_raid(raid, 100)
@@ -67,63 +96,62 @@ def test_reward_ball_defaults_to_boss():
 
 
 def test_resolve_round_deals_damage_on_attack_round():
-    raid = _make_raid(phase="pick", round=1, is_attack_round=True, current_hp=5000)
+    raid = _make_raid(phase="pick", round=1, current_hp=5000)
     raid.participants[42] = BossParticipant(discord_id=42, selected_instance_id=7)
-
-    ball = MagicMock()
-    ball.country = "Testland"
-    ball.attack = 50
-    ball.health = 50
-
-    inst = MagicMock()
-    inst.pk = 7
-    inst.ball = ball
-
-    mock_qs = MagicMock()
-    mock_qs.aget = AsyncMock(return_value=inst)
-    mock_objects = MagicMock()
-    mock_objects.select_related.return_value = mock_qs
-
-    with patch.object(boss_raid.BallInstance, "objects", mock_objects):
-        log = asyncio.run(boss_raid.resolve_round(raid))
+    inst, _ = _make_card()
+    log = _resolve_with_mocks(raid, inst=inst, boss_ball=_make_boss_ball())
 
     assert raid.current_hp < 5000
     assert raid.participants[42].total_damage > 0
     assert "dealt" in log.lower()
+    assert "boss hit" in log.lower() or "boss countered" in log.lower()
     assert raid.phase == "resolve"
 
 
 def test_resolve_round_boss_defeated_message():
     raid = _make_raid(phase="pick", round=1, current_hp=50)
     raid.participants[42] = BossParticipant(discord_id=42, selected_instance_id=7)
-
-    ball = MagicMock()
-    ball.country = "Testland"
-    ball.attack = 50
-    ball.health = 50
-
-    inst = MagicMock()
-    inst.pk = 7
-    inst.ball = ball
-
-    mock_qs = MagicMock()
-    mock_qs.aget = AsyncMock(return_value=inst)
-    mock_objects = MagicMock()
-    mock_objects.select_related.return_value = mock_qs
-
-    with patch.object(boss_raid.BallInstance, "objects", mock_objects):
-        log = asyncio.run(boss_raid.resolve_round(raid))
+    inst, _ = _make_card()
+    log = _resolve_with_mocks(raid, inst=inst, boss_ball=_make_boss_ball())
 
     assert raid.current_hp == 0
     assert "defeated" in log.lower()
     assert raid.phase == "resolve"
 
 
-def test_resolve_round_reports_missing_picks():
-    raid = _make_raid(phase="pick", round=1, is_attack_round=True, current_hp=5000)
-    raid.participants[42] = BossParticipant(discord_id=42)
+def test_boss_counter_knocks_out_weak_card():
+    raid = _make_raid(phase="pick", round=1, current_hp=5000)
+    raid.participants[42] = BossParticipant(discord_id=42, selected_instance_id=7)
+    inst, _ = _make_card(attack=5, health=5)
 
-    log = asyncio.run(boss_raid.resolve_round(raid))
+    with patch.object(boss_raid, "_boss_strike", return_value=999):
+        log = _resolve_with_mocks(raid, inst=inst, boss_ball=_make_boss_ball(attack=500, health=500))
+
+    assert raid.participants[42].disqualified
+    assert "knocked out" in log.lower()
+
+
+def test_boss_counter_survives_strong_card():
+    raid = _make_raid(phase="pick", round=1, current_hp=5000)
+    raid.participants[42] = BossParticipant(discord_id=42, selected_instance_id=7)
+    inst, _ = _make_card(attack=200, health=200)
+
+    with patch.object(boss_raid, "_boss_strike", return_value=50):
+        log = _resolve_with_mocks(raid, inst=inst, boss_ball=_make_boss_ball())
+
+    assert not raid.participants[42].disqualified
+    assert "survives" in log.lower()
+    assert raid.participants[42].round_boss_damage == 50
+
+
+def test_resolve_round_reports_missing_picks():
+    raid = _make_raid(phase="pick", round=1, current_hp=5000)
+    raid.participants[42] = BossParticipant(discord_id=42)
+    boss_ball = _make_boss_ball()
+    ball_objects = MagicMock()
+    ball_objects.aget = AsyncMock(return_value=boss_ball)
+    with patch.object(boss_raid.Ball, "objects", ball_objects):
+        log = asyncio.run(boss_raid.resolve_round(raid))
 
     assert raid.current_hp == 5000
     assert "did not lock" in log.lower()

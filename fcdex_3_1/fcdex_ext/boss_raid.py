@@ -20,6 +20,7 @@ class BossParticipant:
     discord_id: int
     total_damage: int = 0
     round_damage: int = 0
+    round_boss_damage: int = 0
     selected_instance_id: int | None = None
     disqualified: bool = False
 
@@ -142,6 +143,7 @@ def begin_round(raid: BossRaid) -> tuple[bool, str]:
     raid.phase = "pick"
     for participant in raid.participants.values():
         participant.round_damage = 0
+        participant.round_boss_damage = 0
         participant.selected_instance_id = None
     return (
         True,
@@ -160,12 +162,23 @@ async def submit_card(raid: BossRaid, user_id: int, instance: BallInstance) -> t
     if participant.selected_instance_id is not None:
         return False, "You already locked a clubball this round."
     participant.selected_instance_id = instance.pk
-    return True, f"Locked **#{instance.pk}** for round **{raid.round}/{MAX_ROUNDS}**."
+    return True, f"Locked **#{instance.pk}** for round **{raid.round}/{MAX_ROUNDS}** — boss will counter-attack on **Resolve**."
+
+
+def _card_power(inst: BallInstance, ball: Ball) -> int:
+    return instance_attack(inst, ball) + instance_health(inst, ball)
+
+
+def _boss_strike(boss_ball: Ball, round_num: int) -> int:
+    base = boss_ball.attack + boss_ball.health
+    scale = 1.0 + (round_num - 1) * 0.15
+    return max(1, int(base * scale * random.uniform(0.85, 1.15)))
 
 
 async def resolve_round(raid: BossRaid) -> str:
     if raid.phase != "pick":
         return "Nothing to resolve — start a round first."
+    boss_ball = await Ball.objects.aget(pk=raid.boss_ball_id)
     lines: list[str] = [f"### Round **{raid.round}/{MAX_ROUNDS}** results"]
     total = 0
     locked = 0
@@ -188,13 +201,29 @@ async def resolve_round(raid: BossRaid) -> str:
             )
             continue
         ball = inst.ball
-        power = instance_attack(inst, ball) + instance_health(inst, ball)
+        power = _card_power(inst, ball)
         dmg = max(1, int(power * random.uniform(0.85, 1.15)))
         participant.round_damage = dmg
         participant.total_damage += dmg
         total += dmg
         raid.used_instance_ids.add(inst.pk)
         lines.append(f"<@{participant.discord_id}> dealt **{dmg:,}** with {ball.country}")
+
+        boss_hit = _boss_strike(boss_ball, raid.round)
+        participant.round_boss_damage = boss_hit
+        card_hp = power
+        if boss_hit >= card_hp:
+            participant.disqualified = True
+            lines.append(
+                f"👹 Boss countered **#{inst.pk}** for **{boss_hit:,}** — "
+                f"<@{participant.discord_id}> **knocked out!**"
+            )
+        else:
+            remaining = card_hp - boss_hit
+            lines.append(
+                f"👹 Boss hit **#{inst.pk}** for **{boss_hit:,}** "
+                f"(**{remaining:,}** HP left) — <@{participant.discord_id}> survives."
+            )
     raid.current_hp = max(0, raid.current_hp - total)
     if total == 0:
         if not raid.participants:

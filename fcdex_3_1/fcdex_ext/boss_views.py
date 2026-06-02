@@ -321,10 +321,14 @@ async def build_boss_player_layout(ctx: AdminContext, user_id: int, *, notice: s
         header += f"\n\n{notice}"
     if participant:
         header += f"\n\nYour damage: **{participant.total_damage:,}**"
+        if participant.disqualified:
+            header += "\n\n🚫 **Knocked out** — your clubball couldn't survive the boss counter-attack."
+        elif participant.round_boss_damage > 0 and raid.phase == "resolve":
+            header += f"\n\nLast boss hit: **{participant.round_boss_damage:,}**"
     if raid.phase == "pick" and participant and participant.selected_instance_id is not None:
-        header += f"\n\n-# Locked card `#{participant.selected_instance_id}` — waiting for admin **Resolve**."
+        header += f"\n\n-# Locked card `#{participant.selected_instance_id}` — boss counter-attacks on **Resolve**."
     elif raid.phase == "pick" and participant and not participant.disqualified:
-        header += "\n\n-# Pick a clubball below — locked cards deal damage when admin **Resolve**s."
+        header += "\n\n-# Pick a strong clubball — boss counter-attacks locked cards each round."
     container.add_item(TextDisplay(truncate_text(header)))
 
     if raid.phase == "join":
@@ -381,6 +385,7 @@ async def build_boss_admin_layout(ctx: AdminContext, owner_id: int, *, notice: s
                 "# 👑 Boss admin\n"
                 "-# Works in servers and DMs · Components v2.\n"
                 "-# Set boss + optional **reward clubball** · **Start round** → players pick in `/fcdex boss` → **Resolve**.\n"
+                "-# Boss counter-attacks locked clubballs each round — knocked-out players can't fight on.\n"
                 "-# Needs **Boss** special for tagged wins."
             )
         )
