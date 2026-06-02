@@ -15,6 +15,14 @@ from fcdex_3_1.models import (
 )
 
 
+async def _opponent_for_winner(match: TournamentMatch, winner: Player) -> Player | None:
+    """Resolve the other participant without synchronous FK access (async-safe)."""
+    opponent_id = match.player2_id if winner.pk == match.player1_id else match.player1_id
+    if opponent_id is None:
+        return None
+    return await Player.objects.aget(pk=opponent_id)
+
+
 async def _player_group(tournament: Tournament, player: Player) -> str | None:
     try:
         reg = await TournamentRegistration.objects.aget(tournament=tournament, player=player)
@@ -127,7 +135,7 @@ async def claim_match_victory(
     bet_lines = await resolve_bets_for_match(match, winner)
     bet_text = f"\n-# Bets settled: {', '.join(bet_lines)}" if bet_lines else ""
 
-    opponent = match.player2 if winner.pk == match.player1_id else match.player1
+    opponent = await _opponent_for_winner(match, winner)
     try:
         group_part = f" · **{TournamentGroup(match.group).label}**" if match.group else ""
     except ValueError:

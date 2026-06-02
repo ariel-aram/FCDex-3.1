@@ -7,14 +7,15 @@ from discord.ui import ActionRow, Button, Container, Modal, Separator, TextDispl
 
 from ballsdex.core.discord import LayoutView
 from bd_models.models import Ball
+from fcdex_3_1.fcdex_ext.achievement_admin_views import build_achievement_admin_layout
 from fcdex_3_1.fcdex_ext.bd_resolve import resolve_ball_for_lookup
 from fcdex_3_1.fcdex_ext.boss_views import build_boss_admin_layout
 from fcdex_3_1.fcdex_ext.craft_admin_views import build_craft_admin_layout
+from fcdex_3_1.fcdex_ext.interaction_context import admin_context
+from fcdex_3_1.fcdex_ext.merge_admin_views import build_merge_admin_layout
 from fcdex_3_1.fcdex_ext.quest_admin_views import build_quest_admin_layout
 from fcdex_3_1.fcdex_ext.shop_admin_views import build_shop_admin_layout
 from fcdex_3_1.fcdex_ext.views import build_panel_layout, truncate_text
-
-from fcdex_3_1.fcdex_ext.interaction_context import admin_context
 
 if TYPE_CHECKING:
     from discord import Interaction
@@ -49,6 +50,24 @@ class AdminHubControls(ActionRow):
         layout = await build_quest_admin_layout(self.owner_id, ctx, notice="")
         await interaction.response.edit_message(view=layout)
 
+    @button(label="Achievements", style=discord.ButtonStyle.primary, emoji="🏅")
+    async def achievements(self, interaction: Interaction, button: Button):
+        ctx = admin_context(interaction)
+        layout = await build_achievement_admin_layout(self.owner_id, ctx, notice="")
+        await interaction.response.edit_message(view=layout)
+
+    @button(label="Merge", style=discord.ButtonStyle.primary, emoji="✨")
+    async def merge(self, interaction: Interaction, button: Button):
+        ctx = admin_context(interaction)
+        layout = await build_merge_admin_layout(self.owner_id, ctx, notice="")
+        await interaction.response.edit_message(view=layout)
+
+
+class AdminHubControlsRow2(ActionRow):
+    def __init__(self, owner_id: int):
+        super().__init__()
+        self.owner_id = owner_id
+
     @button(label="Owners", style=discord.ButtonStyle.secondary, emoji="🔍")
     async def owners(self, interaction: Interaction, button: Button):
         await interaction.response.send_modal(OwnersLookupModal(self.owner_id))
@@ -80,12 +99,15 @@ def build_admin_hub_layout(owner_id: int, guild_id: int | None, channel_id: int)
                 "-# **Shop** — bundles & optional specials per item.\n"
                 "-# **Craft** — SBC recipes without the web panel.\n"
                 "-# **Quests** — daily quest targets, rewards & hooks.\n"
+                "-# **Achievements** — goals, rewards & visibility for `/achievement menu`.\n"
+                "-# **Merge** — global quota, premium bonus & per-player overrides.\n"
                 "-# **Boss** — start raids here or in any channel/DM."
             )
         )
     )
     container.add_item(Separator())
     container.add_item(AdminHubControls(owner_id))
+    container.add_item(AdminHubControlsRow2(owner_id))
     layout.add_item(container)
     return layout
 

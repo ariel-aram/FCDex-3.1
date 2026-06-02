@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fcdex-3-1"
-version = "2.3.0"
+version = "2.4.1"
 description = "FCDex 3.1 — packs, craft/SBC, battles, tournaments, quests, shop, and more for BallsDex V3"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -26,7 +26,7 @@ where = ["."]
 include = ["fcdex_3_1*"]
 
 [tool.setuptools.package-data]
-fcdex_3_1 = ["media/*", "extra.toml"]
+fcdex_3_1 = ["media/*", "extra.toml", "media/merge_cards.toml"]
 
 [project.optional-dependencies]
 dev = [
@@ -35,6 +35,7 @@ dev = [
   "django>=6.0",
   "django-types",
   "pytest>=8.0",
+  "discord.py>=2.4",
 ]
 
 [tool.pytest.ini_options]

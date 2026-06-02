@@ -64,9 +64,10 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
                 "### 📋 List regime\n`/fcdex list regime:<name>` — browse clubballs by regime",
                 "### 🛒 Shop\n`/fcdex shop` — buy bundles with coins",
                 "### 👑 Boss · 📜 Quests\n`/fcdex boss` — guild raid · `/fcdex quests` · `/fcdex quest claim`",
-                "### 🛡️ Admin\n`/fcdex admin` — shop, craft, quests, boss & owners (Manage Server · ephemeral)",
+                "### 🛡️ Admin\n`/fcdex admin` — shop, craft, quests, achievements, merge, boss "
+                "& owners (Manage Server · ephemeral)",
             ],
-            footer="-# Configure SBCs, achievements & tournaments in admin · FCDex 3.1",
+            footer="-# Configure SBCs, achievements, quests & more in `/fcdex admin` · FCDex 3.1",
         )
         await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]
 
@@ -115,9 +116,14 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
         layout = build_panel_layout(title=entry.label, subtitle=entry.description, sections=[body])
         await interaction.response.send_message(view=layout, ephemeral=True)  # pyright: ignore[reportArgumentType]
 
-    @app_commands.command(name="admin", description="FCDex admin hub — shop, craft, quests, boss, owners")
+    @app_commands.command(
+        name="admin", description="FCDex admin hub — shop, craft, quests, achievements, merge, boss, owners"
+    )
     @_admin_access_check()
     async def admin(self, interaction: discord.Interaction):
+        if interaction.channel_id is None:
+            await interaction.response.send_message("This command must be used in a channel.", ephemeral=True)
+            return
         guild_id = interaction.guild_id
         layout = build_admin_hub_layout(interaction.user.id, guild_id, interaction.channel_id)
         await interaction.response.send_message(view=layout, ephemeral=True)  # pyright: ignore[reportArgumentType]

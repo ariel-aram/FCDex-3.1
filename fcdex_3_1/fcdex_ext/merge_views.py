@@ -10,13 +10,16 @@ from ballsdex.core.discord import LayoutView
 from bd_models.models import BallInstance, Player
 from fcdex_3_1.fcdex_ext.bd_helpers import format_instance, get_ball
 from fcdex_3_1.fcdex_ext.merge_levels import MAX_MERGE_LEVEL, format_level_table_row, get_merge_level_config
-from fcdex_3_1.fcdex_ext.merge_limits import MERGE_WEEKLY_LIMIT
 from fcdex_3_1.fcdex_ext.merge_logic import (
     MergeValidationError,
-    count_player_merges_this_week,
     execute_merge,
     preview_merge_stats,
     validate_merge_batch,
+)
+from fcdex_3_1.fcdex_ext.merge_quota import (
+    format_quota_status_block,
+    get_merge_quota_settings,
+    get_merge_quota_snapshot,
 )
 from fcdex_3_1.fcdex_ext.merge_special import MERGE_SPECIAL_NAME, get_merge_special
 from fcdex_3_1.fcdex_ext.views import truncate_text
@@ -81,8 +84,9 @@ async def build_merge_confirm_view(
     ball = await get_ball(instances[0])
     special = await get_merge_special()
     emoji = special.emoji or "✨"
-    merges_this_week = await count_player_merges_this_week(player)
-    remaining = max(MERGE_WEEKLY_LIMIT - merges_this_week, 0)
+    quota_settings = await get_merge_quota_settings()
+    quota_snapshot = await get_merge_quota_snapshot(player)
+    quota_block = format_quota_status_block(quota_snapshot, settings_period_days=quota_settings.period_days)
 
     try:
         target_level = await validate_merge_batch(player, instances)
@@ -106,11 +110,10 @@ async def build_merge_confirm_view(
     body = (
         f"{level_line}\n\n"
         f"**Inputs ({len(instances)})**\n{card_list}\n\n"
+        f"{quota_block}\n\n"
         f"-# Same clubball only · level 1 needs **common** copies · "
-        f"level {MAX_MERGE_LEVEL} results can't merge again.\n"
-        f"-# Tier guide: {tier_guide}\n"
-        f"-# Weekly limit: `{merges_this_week}/{MERGE_WEEKLY_LIMIT}` merges used "
-        f"(`{remaining}` remaining; resets Monday)."
+        f"levels **1→2→…→7** only · level **{MAX_MERGE_LEVEL}** can't merge again.\n"
+        f"-# Tier guide: {tier_guide}"
     )
 
     layout = LayoutView(timeout=300)

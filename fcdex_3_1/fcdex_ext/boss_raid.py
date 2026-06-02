@@ -145,10 +145,7 @@ def begin_round(raid: BossRaid) -> tuple[bool, str]:
         participant.round_damage = 0
         participant.round_boss_damage = 0
         participant.selected_instance_id = None
-    return (
-        True,
-        f"Round **{raid.round}/{MAX_ROUNDS}** — pick a clubball in `/fcdex boss`, then **Resolve**.",
-    )
+    return (True, f"Round **{raid.round}/{MAX_ROUNDS}** — pick a clubball in `/fcdex boss`, then **Resolve**.")
 
 
 async def submit_card(raid: BossRaid, user_id: int, instance: BallInstance) -> tuple[bool, str]:
@@ -162,7 +159,10 @@ async def submit_card(raid: BossRaid, user_id: int, instance: BallInstance) -> t
     if participant.selected_instance_id is not None:
         return False, "You already locked a clubball this round."
     participant.selected_instance_id = instance.pk
-    return True, f"Locked **#{instance.pk}** for round **{raid.round}/{MAX_ROUNDS}** — boss will counter-attack on **Resolve**."
+    return (
+        True,
+        f"Locked **#{instance.pk}** for round **{raid.round}/{MAX_ROUNDS}** — boss will counter-attack on **Resolve**.",
+    )
 
 
 def _card_power(inst: BallInstance, ball: Ball) -> int:
@@ -195,9 +195,7 @@ async def resolve_round(raid: BossRaid) -> str:
         except BallInstance.DoesNotExist:
             skipped += 1
             log.warning(
-                "Boss raid: missing instance %s for <@%s>",
-                participant.selected_instance_id,
-                participant.discord_id,
+                "Boss raid: missing instance %s for <@%s>", participant.selected_instance_id, participant.discord_id
             )
             continue
         ball = inst.ball
@@ -215,8 +213,7 @@ async def resolve_round(raid: BossRaid) -> str:
         if boss_hit >= card_hp:
             participant.disqualified = True
             lines.append(
-                f"👹 Boss countered **#{inst.pk}** for **{boss_hit:,}** — "
-                f"<@{participant.discord_id}> **knocked out!**"
+                f"👹 Boss countered **#{inst.pk}** for **{boss_hit:,}** — <@{participant.discord_id}> **knocked out!**"
             )
         else:
             remaining = card_hp - boss_hit
@@ -254,13 +251,77 @@ def standings(raid: BossRaid) -> str:
     )
 
 
-async def conclude_raid(raid: BossRaid, *, grant_reward: bool) -> tuple[str, int | None]:
+def pick_raid_winner_id(raid: BossRaid) -> int | None:
+    eligible = [p for p in raid.participants.values() if p.total_damage > 0 and not p.disqualified]
+    if not eligible:
+        return None
+    return max(eligible, key=lambda p: p.total_damage).discord_id
+
+
+def top_damage_tie_ids(raid: BossRaid) -> list[int]:
+    eligible = [p for p in raid.participants.values() if p.total_damage > 0 and not p.disqualified]
+    if not eligible:
+        return []
+    top = max(p.total_damage for p in eligible)
+    return sorted(p.discord_id for p in eligible if p.total_damage == top)
+
+
+def top_damage_leaderboard(raid: BossRaid, *, limit: int = 5) -> str:
+    rows = sorted(raid.participants.values(), key=lambda p: p.total_damage, reverse=True)
+    if not rows:
+        return "*No participants.*"
+    lines = [
+        f"{i}. {'🚫' if p.disqualified else '▸'} <@{p.discord_id}> — **{p.total_damage:,}**"
+        for i, p in enumerate(rows[:limit], 1)
+    ]
+    if len(rows) > limit:
+        lines.append(f"-# …and **{len(rows) - limit}** more")
+    return "\n".join(lines)
+
+
+def format_public_raid_results(
+    raid: BossRaid, *, boss_country: str, winner_id: int | None, reward_line: str | None
+) -> str:
+    if raid.current_hp <= 0:
+        outcome = "☠️ **Boss defeated!**"
+    else:
+        outcome = f"🛡️ **Boss survived** — **{raid.current_hp:,}** HP remaining."
+
+    parts = [f"# 🏁 {boss_country} — raid results", outcome, f"Final HP: **{raid.current_hp:,}** / **{raid.max_hp:,}**"]
+
+    if winner_id is not None:
+        tied = top_damage_tie_ids(raid)
+        if len(tied) > 1:
+            tie_mentions = ", ".join(f"<@{uid}>" for uid in tied)
+            parts.append(f"\n🏆 **Top damage (tie):** {tie_mentions}")
+            parts.append(f"-# Winner for rewards: <@{winner_id}>")
+        else:
+            parts.append(f"\n🏆 **Winner:** <@{winner_id}>")
+    elif not raid.participants:
+        parts.append("\n🏆 **Winner:** *None* — no one joined.")
+    else:
+        parts.append("\n🏆 **Winner:** *None* — no eligible player (0 damage or all knocked out).")
+
+    parts.append("\n### Top damage")
+    parts.append(top_damage_leaderboard(raid))
+    if reward_line:
+        parts.append(f"\n{reward_line}")
+    return "\n".join(parts)
+
+
+@dataclass(frozen=True)
+class RaidConcludeResult:
+    admin_summary: str
+    winner_id: int | None
+    public_message: str
+    channel_id: int
+    announce_publicly: bool
+
+
+async def conclude_raid(raid: BossRaid, *, grant_reward: bool) -> RaidConcludeResult:
     raid.phase = "ended"
-    winner_id: int | None = None
-    if raid.participants:
-        winner = max(raid.participants.values(), key=lambda p: p.total_damage)
-        if winner.total_damage > 0 and not winner.disqualified:
-            winner_id = winner.discord_id
+    winner_id = pick_raid_winner_id(raid)
+    reward_line: str | None = None
 
     lines = [f"### Raid concluded\n{standings(raid)}"]
     if winner_id and grant_reward:
@@ -277,24 +338,36 @@ async def conclude_raid(raid: BossRaid, *, grant_reward: bool) -> tuple[str, int
                 server_id=raid.reward_server_id,
             )
             lines.append(f"\n🏆 <@{winner_id}> received **{reward_ball.country}** ({special.name})!")
+            reward_line = f"🎁 <@{winner_id}> received **{reward_ball.country}** ({special.name})!"
         elif player:
             await BallInstance.objects.acreate(
-                ball=reward_ball,
-                player=player,
-                attack_bonus=0,
-                health_bonus=0,
-                server_id=raid.reward_server_id,
+                ball=reward_ball, player=player, attack_bonus=0, health_bonus=0, server_id=raid.reward_server_id
             )
             lines.append(f"\n🏆 <@{winner_id}> received **{reward_ball.country}**!")
+            reward_line = f"🎁 <@{winner_id}> received **{reward_ball.country}**!"
         else:
             lines.append(f"\n🏆 Top damage: <@{winner_id}> (no player record).")
+            reward_line = f"🎁 Top damage: <@{winner_id}> (could not grant — no player record)."
     elif winner_id:
         lines.append(f"\n🏆 Top damage: <@{winner_id}> (no reward).")
     else:
         lines.append("\nNo winner recorded.")
 
+    boss_ball = await Ball.objects.aget(pk=raid.boss_ball_id)
+    public_message = format_public_raid_results(
+        raid, boss_country=boss_ball.country, winner_id=winner_id, reward_line=reward_line
+    )
+    channel_id = raid.channel_id
+    announce_publicly = raid.reward_server_id is not None
+
     end_raid(raid.scope_id)
-    return "\n".join(lines), winner_id
+    return RaidConcludeResult(
+        admin_summary="\n".join(lines),
+        winner_id=winner_id,
+        public_message=public_message,
+        channel_id=channel_id,
+        announce_publicly=announce_publicly,
+    )
 
 
 def disqualify(raid: BossRaid, user_id: int) -> tuple[bool, str]:

@@ -4,7 +4,10 @@ from datetime import datetime, timedelta
 
 from django.utils import timezone
 
-MERGE_WEEKLY_LIMIT = 5
+from fcdex_3_1.fcdex_ext.merge_config import DEFAULT_WEEKLY_CAP
+
+# Back-compat alias for tests and callers expecting a module-level default.
+MERGE_WEEKLY_LIMIT = DEFAULT_WEEKLY_CAP
 
 
 def calendar_week_bounds(now: datetime | None = None) -> tuple[datetime, datetime]:

@@ -1,0 +1,63 @@
+# Seven forge tiers for /merge (levels 1–7).
+# Optional ball_country per level locks forging to that clubball (case-insensitive dex name).
+# Leave ball_country empty to allow any matching clubball (default).
+
+[quota]
+weekly_cap = 5
+period_days = 7
+
+[[level]]
+level = 1
+input_count = 10
+attack_bonus = 15
+health_bonus = 15
+requires_common = true
+ball_country = ""
+
+[[level]]
+level = 2
+input_count = 8
+attack_bonus = 35
+health_bonus = 35
+requires_common = false
+ball_country = ""
+
+[[level]]
+level = 3
+input_count = 6
+attack_bonus = 60
+health_bonus = 60
+requires_common = false
+ball_country = ""
+
+[[level]]
+level = 4
+input_count = 5
+attack_bonus = 90
+health_bonus = 90
+requires_common = false
+ball_country = ""
+
+[[level]]
+level = 5
+input_count = 4
+attack_bonus = 125
+health_bonus = 125
+requires_common = false
+ball_country = ""
+
+[[level]]
+level = 6
+input_count = 3
+attack_bonus = 165
+health_bonus = 165
+requires_common = false
+ball_country = ""
+
+[[level]]
+level = 7
+input_count = 2
+attack_bonus = 210
+health_bonus = 210
+requires_common = false
+ball_country = ""

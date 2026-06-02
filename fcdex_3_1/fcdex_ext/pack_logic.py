@@ -1,12 +1,22 @@
 from __future__ import annotations
 
+import logging
 import random
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
+import discord
 from django.utils import timezone
 
 from bd_models.models import Ball, BallInstance, Player, balls
 from fcdex_3_1.models import PackClaim, PackType
+
+if TYPE_CHECKING:
+    from ballsdex.core.bot import BallsDexBot
+
+log = logging.getLogger("fcdex_3_1.pack")
 
 PACK_COOLDOWNS = {
     PackType.DAILY: timedelta(hours=24),
@@ -19,6 +29,13 @@ PACK_REWARDS = {
     PackType.WEEKLY: {"coins_min": 1_000, "coins_max": 2_500, "balls": 2},
     PackType.MASCOT: {"coins_min": 500, "coins_max": 1_500, "balls": 1},
 }
+
+
+@dataclass(frozen=True)
+class PackOpenSuccess:
+    message: str
+    instances: tuple[BallInstance, ...]
+    balls: tuple[Ball, ...]
 
 
 async def last_pack_claim(player: Player, pack_type: str) -> PackClaim | None:
@@ -41,7 +58,32 @@ def _spawnable_balls() -> list[Ball]:
     return [b for b in cached if b.enabled]
 
 
-async def grant_pack(player: Player, pack_type: str, *, guild_id: int | None) -> tuple[bool, str]:
+def format_pack_open_message(pack_label: str, coins: int, ball_names: list[str]) -> str:
+    ball_text = ", ".join(ball_names) if ball_names else "no clubball (dex cache empty)"
+    return f"Opened **{pack_label}**! **+{coins:,}** coins · {ball_text}"
+
+
+def collection_card_file(ball: Ball, *, index: int = 1) -> discord.File | None:
+    card = ball.collection_card
+    if not card:
+        return None
+    ext = card.name.rsplit(".", 1)[-1]
+    return discord.File(str(card.path), filename=f"pack-card-{index}.{ext}")
+
+
+async def render_pack_card_file(
+    instance: BallInstance, ball: Ball, *, bot: BallsDexBot, index: int = 1
+) -> discord.File | None:
+    try:
+        with ThreadPoolExecutor() as pool:
+            buffer = await bot.loop.run_in_executor(pool, instance.draw_card)
+        return discord.File(buffer, f"pack-card-{index}.webp")
+    except Exception:
+        log.debug("draw_card failed for pack reward, falling back to collection_card", exc_info=True)
+        return collection_card_file(ball, index=index)
+
+
+async def grant_pack(player: Player, pack_type: str, *, guild_id: int | None) -> tuple[bool, str | PackOpenSuccess]:
     pack_enum = PackType(pack_type)
     last = await last_pack_claim(player, pack_type)
     if remaining := cooldown_remaining(last, pack_type):
@@ -57,18 +99,22 @@ async def grant_pack(player: Player, pack_type: str, *, guild_id: int | None) ->
     pool = _spawnable_balls()
     if not pool and Ball.objects.exists():
         pool = [b async for b in Ball.objects.filter(enabled=True)]
-    granted: list[str] = []
+    granted_balls: list[Ball] = []
+    granted_instances: list[BallInstance] = []
     for _ in range(rewards["balls"]):
         if not pool:
             break
         ball = random.choice(pool)
-        await BallInstance.objects.acreate(ball=ball, player=player, attack_bonus=0, health_bonus=0, server_id=guild_id)
-        granted.append(ball.country)
+        instance = await BallInstance.objects.acreate(
+            ball=ball, player=player, attack_bonus=0, health_bonus=0, server_id=guild_id
+        )
+        granted_balls.append(ball)
+        granted_instances.append(instance)
 
     await PackClaim.objects.acreate(player=player, pack_type=pack_type)
     if pack_type == PackType.DAILY:
         from fcdex_3_1.fcdex_ext.quest_logic import bump_quest
 
         await bump_quest(player, "pack_daily")
-    ball_text = ", ".join(granted) if granted else "no clubball (dex cache empty)"
-    return True, f"Opened **{pack_enum.label}**! **+{coins:,}** coins · {ball_text}"
+    message = format_pack_open_message(pack_enum.label, coins, [b.country for b in granted_balls])
+    return True, PackOpenSuccess(message=message, instances=tuple(granted_instances), balls=tuple(granted_balls))

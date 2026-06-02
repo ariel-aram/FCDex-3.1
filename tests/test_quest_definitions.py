@@ -8,9 +8,7 @@ def test_fallback_specs_match_daily_quests():
     assert len(specs) == len(DAILY_QUESTS)
     for spec, row in zip(specs, DAILY_QUESTS, strict=True):
         key, label, target, coins, hook = row
-        assert spec == QuestSpec(
-            quest_key=key, label=label, target=target, reward_coins=coins, hook_key=hook
-        )
+        assert spec == QuestSpec(quest_key=key, label=label, target=target, reward_coins=coins, hook_key=hook)
 
 
 def test_spec_from_row_fields():

@@ -12,7 +12,7 @@ MERGE_BACKGROUND_FILENAME = "fcdex_merge_background.png"
 
 
 def merge_card_path() -> Path:
-    return Path(str(files("fcdex_3_1").joinpath("media/merge.jpg")))
+    return Path(str(files("fcdex_3_1").joinpath("media/merge-level1.jpg")))
 
 
 def prepare_merge_background(raw: bytes) -> bytes:

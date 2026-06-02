@@ -33,8 +33,7 @@ log = logging.getLogger("fcdex_3_1.leaderboard.views")
 
 def profile_from_user(user: discord.User | discord.Member) -> LeaderboardProfile:
     return LeaderboardProfile(
-        display_name=resolve_leaderboard_display_name(username=user.name),
-        avatar_url=str(user.display_avatar.url),
+        display_name=resolve_leaderboard_display_name(username=user.name), avatar_url=str(user.display_avatar.url)
     )
 
 

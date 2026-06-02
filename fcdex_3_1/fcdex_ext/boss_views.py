@@ -113,10 +113,7 @@ class StartBossInputModal(Modal, title="Start boss by PK / name"):
     clubball = TextInput(label="Boss clubball", placeholder="PK or country name (e.g. 42)", max_length=128)
     hp = TextInput(label="Boss HP", placeholder="10000", max_length=12, default="10000")
     reward_clubball = TextInput(
-        label="Reward clubball (optional)",
-        required=False,
-        placeholder="PK or country — winner prize",
-        max_length=128,
+        label="Reward clubball (optional)", required=False, placeholder="PK or country — winner prize", max_length=128
     )
 
     def __init__(self, owner_id: int):
@@ -268,9 +265,21 @@ class BossAdminControls(ActionRow):
         if raid is None:
             await interaction.response.send_message("No active raid.", ephemeral=True)
             return
-        summary, _ = await boss_raid.conclude_raid(raid, grant_reward=True)
-        layout = await build_boss_admin_layout(ctx, self.owner_id, notice=summary)
-        await interaction.response.edit_message(view=layout)
+        await interaction.response.defer(ephemeral=True)
+        result = await boss_raid.conclude_raid(raid, grant_reward=True)
+        notice = result.admin_summary
+        if result.announce_publicly:
+            try:
+                channel = await interaction.client.fetch_channel(result.channel_id)
+                await channel.send(result.public_message)
+                notice += f"\n\n📢 **Announced** results in <#{result.channel_id}>."
+            except Exception:
+                log.exception("Failed to post boss raid results to channel %s", result.channel_id)
+                notice += f"\n\n⚠️ Could not post results to <#{result.channel_id}> — check bot permissions."
+        else:
+            notice += "\n\n-# DM raids: results stay in this panel only (no public channel)."
+        layout = await build_boss_admin_layout(ctx, self.owner_id, notice=notice)
+        await interaction.edit_original_response(view=layout)
 
     async def _start_round(self, interaction: Interaction) -> None:
         ctx = admin_context(interaction)
@@ -384,7 +393,9 @@ async def build_boss_admin_layout(ctx: AdminContext, owner_id: int, *, notice: s
             truncate_text(
                 "# 👑 Boss admin\n"
                 "-# Works in servers and DMs · Components v2.\n"
-                "-# Set boss + optional **reward clubball** · **Start round** → players pick in `/fcdex boss` → **Resolve**.\n"
+                "-# Set boss + optional **reward clubball** · **Start round** → pick in `/fcdex boss` "
+                "→ **Resolve** → **Conclude**.\n"
+                "-# **Conclude** grants the reward and posts results in the raid channel (server raids only).\n"
                 "-# Boss counter-attacks locked clubballs each round — knocked-out players can't fight on.\n"
                 "-# Needs **Boss** special for tagged wins."
             )

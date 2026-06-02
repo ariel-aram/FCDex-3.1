@@ -84,9 +84,7 @@ class SBCRecipeToggleSelect(discord.ui.Select):
         self.owner_id = owner_id
         options = [
             discord.SelectOption(
-                label=r.name[:100],
-                value=str(r.pk),
-                description=f"{'On' if r.enabled else 'Off'}"[:100],
+                label=r.name[:100], value=str(r.pk), description=f"{'On' if r.enabled else 'Off'}"[:100]
             )
             for r in recipes[:25]
         ]

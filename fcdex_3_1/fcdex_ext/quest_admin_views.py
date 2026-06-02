@@ -31,10 +31,7 @@ class CreateQuestModal(Modal, title="New daily quest"):
     target = TextInput(label="Target count", placeholder="1", max_length=5, default="1")
     reward_coins = TextInput(label="Coin reward", placeholder="500", max_length=12, default="0")
     hook_key = TextInput(
-        label="Progress hook",
-        placeholder="pack_daily · battle_play · merge_once",
-        max_length=32,
-        default="pack_daily",
+        label="Progress hook", placeholder="pack_daily · battle_play · merge_once", max_length=32, default="pack_daily"
     )
 
     def __init__(self, owner_id: int):
@@ -69,11 +66,7 @@ class CreateQuestModal(Modal, title="New daily quest"):
             await interaction.response.send_message(f"Quest key **`{key}`** already exists.", ephemeral=True)
             return
         quest = await QuestDefinition.objects.acreate(
-            quest_key=key,
-            label=self.label.value.strip(),
-            target=target,
-            reward_coins=reward,
-            hook_key=hook,
+            quest_key=key, label=self.label.value.strip(), target=target, reward_coins=reward, hook_key=hook
         )
         ctx = admin_context(interaction)
         layout = await build_quest_admin_layout(
@@ -86,7 +79,9 @@ class EditQuestModal(Modal, title="Edit daily quest"):
     label = TextInput(label="Display name", max_length=128)
     target = TextInput(label="Target count", max_length=5)
     reward_coins = TextInput(label="Coin reward", max_length=12)
-    description = TextInput(label="Description (optional)", required=False, max_length=200, style=discord.TextStyle.paragraph)
+    description = TextInput(
+        label="Description (optional)", required=False, max_length=200, style=discord.TextStyle.paragraph
+    )
 
     def __init__(self, owner_id: int, quest: QuestDefinition):
         super().__init__()
@@ -168,9 +163,7 @@ class QuestEditSelect(discord.ui.Select):
         self.owner_id = owner_id
         options = [
             discord.SelectOption(
-                label=q.label[:100],
-                value=str(q.pk),
-                description=f"`{q.quest_key}` · +{q.reward_coins:,} coins"[:100],
+                label=q.label[:100], value=str(q.pk), description=f"`{q.quest_key}` · +{q.reward_coins:,} coins"[:100]
             )
             for q in quests[:25]
         ]

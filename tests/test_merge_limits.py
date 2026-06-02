@@ -9,7 +9,7 @@ from datetime import timezone as dt_timezone
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -27,6 +27,7 @@ from fcdex_3_1.fcdex_ext.merge_limits import (
     weekly_merge_limit_message,
     weekly_merge_limit_reached,
 )
+from fcdex_3_1.fcdex_ext.merge_quota import merge_quota_limit_message, merge_quota_limit_reached
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -72,6 +73,15 @@ class _DiscordStub(ModuleType):
 
 class _FcdexModelsMergeStub(ModuleType):
     MergeLog: Any
+    MergeQuotaSettings: Any
+    PlayerMergeQuota: Any
+
+
+class _MergeQuotaStub(ModuleType):
+    get_merge_quota_snapshot: Any
+    get_merge_quota_settings: Any
+    merge_quota_limit_reached: Any
+    merge_quota_limit_message: Any
 
 
 class _BdHelpersStub(ModuleType):
@@ -177,6 +187,28 @@ def _load_merge_logic_for_validation_tests():
     merge_log_manager.filter.return_value = merge_log_filter
     fcdex_models = _FcdexModelsMergeStub("fcdex_3_1.models")
     fcdex_models.MergeLog = SimpleNamespace(objects=merge_log_manager)
+    fcdex_models.MergeQuotaSettings = SimpleNamespace(objects=MagicMock())
+    fcdex_models.PlayerMergeQuota = SimpleNamespace(objects=MagicMock())
+
+    merge_quota = _MergeQuotaStub("fcdex_3_1.fcdex_ext.merge_quota")
+
+    async def _fake_snapshot(player):
+        used = await merge_log_manager.filter.return_value.acount()
+        return SimpleNamespace(
+            used=used,
+            cap=MERGE_WEEKLY_LIMIT,
+            period_start=datetime(2026, 5, 25, tzinfo=dt_timezone.utc),
+            period_end=datetime(2026, 6, 1, tzinfo=dt_timezone.utc),
+            premium_bonus=0,
+            cap_override=None,
+        )
+
+    merge_quota.get_merge_quota_snapshot = _fake_snapshot
+    merge_quota.get_merge_quota_settings = AsyncMock(
+        return_value=SimpleNamespace(weekly_cap=MERGE_WEEKLY_LIMIT, period_days=7)
+    )
+    merge_quota.merge_quota_limit_reached = merge_quota_limit_reached
+    merge_quota.merge_quota_limit_message = merge_quota_limit_message
 
     bd_helpers = _BdHelpersStub("fcdex_3_1.fcdex_ext.bd_helpers")
     bd_helpers.format_instance = AsyncMock(return_value="label")
@@ -199,12 +231,16 @@ def _load_merge_logic_for_validation_tests():
         "fcdex_3_1.fcdex_ext.bd_helpers": bd_helpers,
         "fcdex_3_1.fcdex_ext.services": services,
         "fcdex_3_1.fcdex_ext.merge_levels": importlib.import_module("fcdex_3_1.fcdex_ext.merge_levels"),
+        "fcdex_3_1.fcdex_ext.merge_config": importlib.import_module("fcdex_3_1.fcdex_ext.merge_config"),
+        "fcdex_3_1.fcdex_ext.merge_quota": merge_quota,
     }
 
     saved: dict[str, ModuleType | None] = {}
     for name, module in stubs.items():
         saved[name] = sys.modules.get(name)
         sys.modules[name] = module
+
+    sys.modules.pop("fcdex_3_1.fcdex_ext.merge_logic", None)
 
     path = ROOT / "fcdex_3_1" / "fcdex_ext" / "merge_logic.py"
     spec = importlib.util.spec_from_file_location("fcdex_merge_logic_test", path)
@@ -343,11 +379,15 @@ def test_validate_merge_batch_blocks_sixth_weekly_merge():
         for i in range(1, 3)
     ]
 
-    with pytest.raises(merge_logic.MergeValidationError) as exc:
+    quota_settings = AsyncMock(return_value=SimpleNamespace(weekly_cap=MERGE_WEEKLY_LIMIT, period_days=7))
+    with (
+        patch("fcdex_3_1.fcdex_ext.merge_quota.get_merge_quota_settings", quota_settings),
+        pytest.raises(merge_logic.MergeValidationError) as exc,
+    ):
         asyncio.run(merge_logic.validate_merge_batch(player, instances))
 
     assert str(MERGE_WEEKLY_LIMIT) in exc.value.message
-    assert "weekly merge limit" in exc.value.message
+    assert "merge quota" in exc.value.message
 
 
 def test_validate_merge_batch_blocks_already_merged_instance():

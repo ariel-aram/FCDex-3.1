@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import re
+
+import discord
+
 from bd_models.models import Ball, BallInstance, Player
+
+_MENTION_RE = re.compile(r"^<@!?(\d+)>$")
 
 
 def _normalize_token(value: str) -> str:
@@ -68,3 +74,32 @@ async def resolve_ball_instance_input(value: str, player: Player) -> BallInstanc
         .order_by("-pk")
         .afirst()
     )
+
+
+async def resolve_player_input(value: str, *, guild: discord.Guild | None = None) -> Player | None:
+    """Resolve a Player by Discord ID, player PK, @mention, or guild display/name."""
+    raw = value.strip()
+    if not raw:
+        return None
+
+    mention = _MENTION_RE.match(raw)
+    token = mention.group(1) if mention else raw.lstrip("@").lstrip("#")
+
+    if token.isdigit():
+        discord_id = int(token)
+        player = await Player.objects.filter(discord_id=discord_id).afirst()
+        if player is not None:
+            return player
+        if len(token) < 17:
+            return await Player.objects.filter(pk=discord_id).afirst()
+
+    if guild is not None:
+        lowered = raw.lower().lstrip("@")
+        for member in guild.members:
+            names = {member.name.lower(), member.display_name.lower()}
+            if member.global_name:
+                names.add(member.global_name.lower())
+            if lowered in names:
+                return await Player.objects.filter(discord_id=member.id).afirst()
+
+    return None

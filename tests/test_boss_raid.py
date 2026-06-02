@@ -4,7 +4,15 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fcdex_3_1.fcdex_ext import boss_raid
-from fcdex_3_1.fcdex_ext.boss_raid import MAX_ROUNDS, BossParticipant, BossRaid, can_start_round
+from fcdex_3_1.fcdex_ext.boss_raid import (
+    MAX_ROUNDS,
+    BossParticipant,
+    BossRaid,
+    can_start_round,
+    format_public_raid_results,
+    pick_raid_winner_id,
+    top_damage_tie_ids,
+)
 
 
 def _make_raid(**kwargs) -> BossRaid:
@@ -38,7 +46,10 @@ def _resolve_with_mocks(raid: BossRaid, *, inst, boss_ball):
     inst_objects.select_related.return_value = inst_qs
     ball_objects = MagicMock()
     ball_objects.aget = AsyncMock(return_value=boss_ball)
-    with patch.object(boss_raid.BallInstance, "objects", inst_objects), patch.object(boss_raid.Ball, "objects", ball_objects):
+    with (
+        patch.object(boss_raid.BallInstance, "objects", inst_objects),
+        patch.object(boss_raid.Ball, "objects", ball_objects),
+    ):
         return asyncio.run(boss_raid.resolve_round(raid))
 
 
@@ -142,6 +153,45 @@ def test_boss_counter_survives_strong_card():
     assert not raid.participants[42].disqualified
     assert "survives" in log.lower()
     assert raid.participants[42].round_boss_damage == 50
+
+
+def test_pick_winner_skips_disqualified_top_damager():
+    raid = _make_raid()
+    raid.participants[1] = BossParticipant(discord_id=1, total_damage=500, disqualified=True)
+    raid.participants[2] = BossParticipant(discord_id=2, total_damage=100)
+    assert pick_raid_winner_id(raid) == 2
+
+
+def test_pick_winner_none_when_no_damage():
+    raid = _make_raid()
+    raid.participants[1] = BossParticipant(discord_id=1, total_damage=0)
+    assert pick_raid_winner_id(raid) is None
+
+
+def test_top_damage_tie_ids():
+    raid = _make_raid()
+    raid.participants[1] = BossParticipant(discord_id=1, total_damage=100)
+    raid.participants[2] = BossParticipant(discord_id=2, total_damage=100)
+    assert top_damage_tie_ids(raid) == [1, 2]
+
+
+def test_format_public_raid_results_defeated_and_reward():
+    raid = _make_raid(current_hp=0)
+    raid.participants[42] = BossParticipant(discord_id=42, total_damage=999)
+    text = format_public_raid_results(
+        raid, boss_country="Test Boss", winner_id=42, reward_line="🎁 <@42> received **Prize** (Boss)!"
+    )
+    assert "Test Boss" in text
+    assert "defeated" in text.lower()
+    assert "<@42>" in text
+    assert "Prize" in text
+
+
+def test_format_public_raid_results_no_participants():
+    raid = _make_raid(current_hp=500)
+    text = format_public_raid_results(raid, boss_country="Lonely Boss", winner_id=None, reward_line=None)
+    assert "survived" in text.lower()
+    assert "no one joined" in text.lower()
 
 
 def test_resolve_round_reports_missing_picks():

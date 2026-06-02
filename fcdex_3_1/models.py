@@ -266,6 +266,42 @@ class MergeLog(models.Model):
         return f"Merge #{self.pk} by player {self.player_id}"
 
 
+class MergeQuotaSettings(models.Model):
+    """Singleton row (pk=1) for global merge quota defaults."""
+
+    weekly_cap = models.PositiveIntegerField(default=5, help_text="Base merge cap per player per quota period.")
+    period_days = models.PositiveSmallIntegerField(
+        default=7, help_text="Quota window length in days. Use 7 for ISO calendar weeks (Monday reset)."
+    )
+
+    class Meta:
+        verbose_name = "Merge quota settings"
+        verbose_name_plural = "Merge quota settings"
+
+    def __str__(self) -> str:
+        return f"Merge quota · cap {self.weekly_cap} / {self.period_days}d"
+
+
+class PlayerMergeQuota(models.Model):
+    player = models.OneToOneField(Player, on_delete=models.CASCADE, related_name="fcdex_merge_quota")
+    player_id: int
+    premium_bonus = models.PositiveIntegerField(
+        default=0, help_text="Extra merges per period on top of the global weekly cap."
+    )
+    cap_override = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Replace global cap for this player (premium bonus still applies unless you set cap only).",
+    )
+
+    class Meta:
+        verbose_name = "Player merge quota"
+        verbose_name_plural = "Player merge quotas"
+
+    def __str__(self) -> str:
+        return f"Merge quota override · player #{self.player_id}"
+
+
 class PackType(models.TextChoices):
     DAILY = "daily", "Daily Pack"
     WEEKLY = "weekly", "Weekly Pack"

@@ -63,7 +63,9 @@ async def get_quest_spec(quest_key: str) -> QuestSpec | None:
 async def quest_keys_for_hook(hook_key: str) -> list[str]:
     keys = [
         row.quest_key
-        async for row in QuestDefinition.objects.filter(hook_key=hook_key, enabled=True).order_by("sort_order", "quest_key")
+        async for row in QuestDefinition.objects.filter(hook_key=hook_key, enabled=True).order_by(
+            "sort_order", "quest_key"
+        )
     ]
     if keys:
         return keys
@@ -75,10 +77,7 @@ async def ensure_daily_quests(player: Player) -> list[PlayerQuestProgress]:
     rows: list[PlayerQuestProgress] = []
     for spec in await list_quest_specs(enabled_only=True):
         row, _ = await PlayerQuestProgress.objects.aget_or_create(
-            player=player,
-            quest_key=spec.quest_key,
-            day=today,
-            defaults={"target": spec.target, "progress": 0},
+            player=player, quest_key=spec.quest_key, day=today, defaults={"target": spec.target, "progress": 0}
         )
         if row.target != spec.target and not row.claimed_at:
             row.target = spec.target

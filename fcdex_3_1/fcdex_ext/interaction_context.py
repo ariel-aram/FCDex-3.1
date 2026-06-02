@@ -19,6 +19,8 @@ class AdminContext:
     @classmethod
     def from_interaction(cls, interaction: discord.Interaction) -> AdminContext:
         guild_id = interaction.guild_id
+        if interaction.channel_id is None:
+            raise ValueError("Interaction has no channel.")
         channel_id = interaction.channel_id
         return cls(
             guild_id=guild_id,

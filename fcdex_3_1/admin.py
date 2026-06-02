@@ -3,8 +3,10 @@ from django.contrib import admin
 from .models import (
     Achievement,
     MergeLog,
+    MergeQuotaSettings,
     PackClaim,
     PlayerAchievement,
+    PlayerMergeQuota,
     PlayerQuestProgress,
     PlayerStats,
     QuestDefinition,
@@ -175,5 +177,23 @@ class ShopPurchaseAdmin(admin.ModelAdmin):
 class MergeLogAdmin(admin.ModelAdmin):
     autocomplete_fields = ("player", "source_ball1", "source_ball2", "result_ball")
     search_fields = ("player__discord_id",)
-    list_display = ("player", "result_ball", "created_at")
+    list_display = ("player", "merge_level", "result_ball", "created_at")
     readonly_fields = ("created_at",)
+
+
+@admin.register(MergeQuotaSettings)
+class MergeQuotaSettingsAdmin(admin.ModelAdmin):
+    list_display = ("weekly_cap", "period_days")
+
+    def has_add_permission(self, request):
+        return not MergeQuotaSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PlayerMergeQuota)
+class PlayerMergeQuotaAdmin(admin.ModelAdmin):
+    autocomplete_fields = ("player",)
+    search_fields = ("player__discord_id",)
+    list_display = ("player", "premium_bonus", "cap_override")

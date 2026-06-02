@@ -2,8 +2,22 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from enum import StrEnum
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+
+try:
+    import discord  # noqa: F401
+except ImportError:
+    discord_stub = ModuleType("discord")
+
+    class _File:
+        def __init__(self, fp, filename: str | None = None) -> None:
+            self.fp = fp
+            self.filename = filename
+
+    discord_stub.File = _File
+    sys.modules["discord"] = discord_stub
 
 import django
 from django.conf import settings
@@ -44,6 +58,49 @@ class _TournamentStatus:
     COMPLETED = "completed"
 
 
+class _TournamentGroup:
+    LEGACY = "legacy"
+    MAIN = "main"
+
+    def __init__(self, value: str) -> None:
+        self.value = value
+        self.label = value.title()
+
+
+class _PackType(StrEnum):
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MASCOT = "mascot"
+
+
+class _AchievementType:
+    BATTLES_WON = "battles_won"
+    MERGES = "merges"
+    TOURNAMENT_WIN = "tournament_win"
+    TOURNAMENT_PARTICIPATE = "tournament_participate"
+    BALLS_OWNED = "balls_owned"
+    CUSTOM = "custom"
+    choices = (
+        (BATTLES_WON, "Battles Won"),
+        (MERGES, "Merges Completed"),
+        (TOURNAMENT_WIN, "Tournament Wins"),
+        (TOURNAMENT_PARTICIPATE, "Tournament Participation"),
+        (BALLS_OWNED, "Clubballs Owned"),
+        (CUSTOM, "Custom (manual)"),
+    )
+
+    @classmethod
+    def __iter__(cls):
+        for value, label in cls.choices:
+            yield SimpleNamespace(value=value, label=label)
+
+
+class _QuestHook:
+    PACK_DAILY = "pack_daily"
+    BATTLE_PLAY = "battle_play"
+    MERGE_ONCE = "merge_once"
+
+
 class _ModelsStub(ModuleType):
     Tournament: type
     TournamentStatus: type[_TournamentStatus]
@@ -52,6 +109,29 @@ class _ModelsStub(ModuleType):
         super().__init__("fcdex_3_1.models")
         self.Tournament = object
         self.TournamentStatus = _TournamentStatus
+        self.TournamentMatch = object
+        self.TournamentRegistration = object
+        self.TournamentBet = object
+        self.TournamentGroup = _TournamentGroup
+        self.TournamentRound = object
+        self.TournamentMatchPrize = object
+        self.TournamentPrizeType = object
+        self.Achievement = object
+        self.AchievementType = _AchievementType
+        self.PlayerAchievement = object
+        self.PlayerStats = object
+        self.MergeLog = object
+        self.MergeQuotaSettings = object
+        self.PlayerMergeQuota = object
+        self.PackType = _PackType
+        self.PackClaim = object
+        self.QuestDefinition = object
+        self.QuestHook = _QuestHook
+        self.PlayerQuestProgress = object
+        self.SBCRecipe = object
+        self.ShopBundle = object
+        self.ShopBundleItem = object
+        self.ShopPurchase = object
 
 
 _models_stub = _ModelsStub()

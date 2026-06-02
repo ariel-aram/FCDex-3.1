@@ -35,7 +35,7 @@ async def grant_prize_entry(player: Player, prize: TournamentMatchPrize, *, guil
         return f"**+{amount:,}** coins"
 
     if prize.prize_type == TournamentPrizeType.BALL and prize.ball_id:
-        ball = prize.ball or await Ball.objects.aget(pk=prize.ball_id)
+        ball = await Ball.objects.aget(pk=prize.ball_id)
         await BallInstance.objects.acreate(ball=ball, player=player, attack_bonus=0, health_bonus=0, server_id=guild_id)
         return f"**{ball.country}** clubball"
 

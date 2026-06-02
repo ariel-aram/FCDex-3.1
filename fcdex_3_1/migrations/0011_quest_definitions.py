@@ -33,9 +33,7 @@ class Migration(migrations.Migration):
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 (
                     "quest_key",
-                    models.CharField(
-                        help_text="Unique slug shown in /fcdex quests.", max_length=32, unique=True
-                    ),
+                    models.CharField(help_text="Unique slug shown in /fcdex quests.", max_length=32, unique=True),
                 ),
                 ("label", models.CharField(max_length=128)),
                 ("description", models.TextField(blank=True, default="")),

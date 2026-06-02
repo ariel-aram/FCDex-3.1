@@ -12,14 +12,14 @@ from fcdex_3_1.fcdex_ext.merge_levels import (
     MAX_MERGE_LEVEL,
     detect_target_level,
     get_merge_level_config,
+    level_requires_ball_country,
     resolve_merge_level_from_bonuses,
 )
-from fcdex_3_1.fcdex_ext.merge_limits import (
-    MERGE_WEEKLY_LIMIT,
-    calendar_week_bounds,
-    merge_special_blocked_message,
-    weekly_merge_limit_message,
-    weekly_merge_limit_reached,
+from fcdex_3_1.fcdex_ext.merge_limits import merge_special_blocked_message
+from fcdex_3_1.fcdex_ext.merge_quota import (
+    get_merge_quota_snapshot,
+    merge_quota_limit_message,
+    merge_quota_limit_reached,
 )
 from fcdex_3_1.fcdex_ext.merge_special import MERGE_SPECIAL_NAME, get_merge_special
 from fcdex_3_1.fcdex_ext.services import increment_stat
@@ -34,11 +34,6 @@ class MergeValidationError(Exception):
     def __init__(self, message: str):
         self.message = message
         super().__init__(message)
-
-
-async def count_player_merges_this_week(player: Player) -> int:
-    week_start, week_end = calendar_week_bounds()
-    return await MergeLog.objects.filter(player=player, created_at__gte=week_start, created_at__lt=week_end).acount()
 
 
 async def instance_has_merge_special(instance: BallInstance) -> bool:
@@ -86,6 +81,23 @@ def _duplicate_instance_ids(instances: list[BallInstance]) -> set[int]:
     return duplicates
 
 
+async def _validate_merge_quota(player: Player) -> None:
+    snapshot = await get_merge_quota_snapshot(player)
+    if merge_quota_limit_reached(snapshot.used, snapshot.cap):
+        from fcdex_3_1.fcdex_ext.merge_quota import get_merge_quota_settings
+
+        settings_row = await get_merge_quota_settings()
+        raise MergeValidationError(merge_quota_limit_message(cap=snapshot.cap, period_days=settings_row.period_days))
+
+
+async def _validate_ball_country_for_level(ball: Ball, target_level: int) -> None:
+    required = level_requires_ball_country(target_level)
+    if required and ball.country.lower() != required.lower():
+        raise MergeValidationError(
+            f"Forge **level {target_level}** only accepts **{required}** clubballs (you selected **{ball.country}**)."
+        )
+
+
 async def validate_merge_batch(player: Player, instances: list[BallInstance]) -> int:
     if len(instances) < 2:
         raise MergeValidationError("Pick at least two clubballs to forge.")
@@ -107,10 +119,11 @@ async def validate_merge_batch(player: Player, instances: list[BallInstance]) ->
     if len(ball_ids) != 1:
         raise MergeValidationError("All inputs must be the same clubball type (same country).")
 
+    result_ball = await get_ball(instances[0])
+    await _validate_ball_country_for_level(result_ball, target_level)
+
     required_input_level = target_level - 1
-    merges_this_week = await count_player_merges_this_week(player)
-    if weekly_merge_limit_reached(merges_this_week):
-        raise MergeValidationError(weekly_merge_limit_message(limit=MERGE_WEEKLY_LIMIT))
+    await _validate_merge_quota(player)
 
     for instance in instances:
         if instance.player_id != player.pk:
