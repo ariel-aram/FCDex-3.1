@@ -65,7 +65,8 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
                 "### 🛒 Shop\n`/fcdex shop` — buy bundles with coins",
                 "### 👑 Boss · 📜 Quests\n`/fcdex boss` — guild raid · `/fcdex quests` · `/fcdex quest claim`",
                 "### 🛡️ Admin\n`/fcdex admin` — shop, craft, quests, achievements, merge, boss "
-                "& owners (Manage Server · ephemeral)",
+                "& owners (Manage Server · ephemeral)\n"
+                "`/broadcast dm` · `/broadcast server` — mass announcements (confirm · rate-limited)",
             ],
             footer="-# Configure SBCs, achievements, quests & more in `/fcdex admin` · FCDex 3.1",
         )
