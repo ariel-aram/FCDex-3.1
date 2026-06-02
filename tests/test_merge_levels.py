@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from fcdex_3_1.fcdex_ext.merge_levels import MERGE_LEVELS, get_merge_level_config
+from fcdex_3_1.fcdex_ext.merge_levels import MERGE_LEVELS, format_merge_count_mismatch, get_merge_level_config
 
 
 def _preview_attack(base_attack: int, bonus: int) -> int:
@@ -36,3 +36,10 @@ def test_level_seven_bonus_values():
     cfg = get_merge_level_config(7)
     assert cfg.attack_bonus == 210
     assert cfg.health_bonus == 210
+
+
+def test_format_merge_count_mismatch_for_commons():
+    message = format_merge_count_mismatch(0, 1, 2)
+    assert "10" in message
+    assert "L1" in message
+    assert "level 7" not in message.lower()

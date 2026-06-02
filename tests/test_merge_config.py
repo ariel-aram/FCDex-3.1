@@ -13,3 +13,13 @@ def test_merge_cards_toml_loads_seven_levels():
 
 def test_merge_level_input_counts_match_tiers():
     assert [MERGE_LEVELS[level].input_count for level in range(1, 8)] == [10, 8, 6, 5, 4, 3, 2]
+
+
+def test_merge_level_emojis_loaded():
+    for level in range(1, 8):
+        assert MERGE_LEVELS[level].emoji
+
+
+def test_merge_level_emojis_configured():
+    for level in range(1, 8):
+        assert MERGE_LEVELS[level].emoji

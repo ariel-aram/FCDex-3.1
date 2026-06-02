@@ -283,16 +283,47 @@ def _make_instance(
     return instance
 
 
+def test_validate_merge_batch_two_commons_suggests_forge_l1_not_l7():
+    merge_logic, _ = _load_merge_logic_for_validation_tests()
+    player = SimpleNamespace(pk=1)
+    merge_logic.get_merge_special = AsyncMock(return_value=SimpleNamespace(pk=42, name="FCDex Merge"))
+    instances = [_make_instance(pk=1, player_id=1, ball_id=1), _make_instance(pk=2, player_id=1, ball_id=1)]
+
+    with pytest.raises(merge_logic.MergeValidationError) as exc:
+        asyncio.run(merge_logic.validate_merge_batch(player, instances))
+
+    message = exc.value.message.lower()
+    assert "forge l1" in message or "l1" in message
+    assert "level 7" not in message
+    assert "level 6" not in message
+    assert "10" in exc.value.message
+
+
 def test_validate_merge_batch_blocks_different_clubballs():
     merge_logic, _ = _load_merge_logic_for_validation_tests()
     player = SimpleNamespace(pk=1)
-    instances = [_make_instance(pk=1, player_id=1, ball_id=1), _make_instance(pk=2, player_id=1, ball_id=2)]
+    instances = [_make_instance(pk=i, player_id=1, ball_id=1 if i <= 5 else 2) for i in range(1, 11)]
     merge_logic.get_merge_special = AsyncMock(return_value=SimpleNamespace(pk=42, name="FCDex Merge"))
 
     with pytest.raises(merge_logic.MergeValidationError) as exc:
         asyncio.run(merge_logic.validate_merge_batch(player, instances))
 
-    assert "same clubball type" in exc.value.message
+    assert "same clubball" in exc.value.message
+
+
+def test_validate_merge_batch_two_commons_hint_forge_l1_not_l7():
+    merge_logic, _ = _load_merge_logic_for_validation_tests()
+    player = SimpleNamespace(pk=1)
+    instances = [_make_instance(pk=1, player_id=1, ball_id=1), _make_instance(pk=2, player_id=1, ball_id=1)]
+    merge_logic.get_merge_special = AsyncMock(return_value=SimpleNamespace(pk=42, name="FCDex Merge"))
+
+    with pytest.raises(merge_logic.MergeValidationError) as exc:
+        asyncio.run(merge_logic.validate_merge_batch(player, instances))
+
+    message = exc.value.message.lower()
+    assert "forge l1" in message or "forge **l1**" in exc.value.message.lower()
+    assert "level 6" not in message
+    assert "level 7" not in message
 
 
 def test_validate_merge_batch_level_one_requires_ten_commons():
@@ -396,7 +427,7 @@ def test_validate_merge_batch_blocks_already_merged_instance():
     merge_logic.get_merge_special = AsyncMock(return_value=SimpleNamespace(pk=42, name="FCDex Merge"))
     merge_log_manager.filter.return_value.acount = AsyncMock(return_value=0)
     merge_log_manager.filter.return_value.aexists = AsyncMock(return_value=True)
-    instances = [_make_instance(pk=1, player_id=1), _make_instance(pk=2, player_id=1)]
+    instances = [_make_instance(pk=i, player_id=1, ball_id=1) for i in range(1, 11)]
 
     with pytest.raises(merge_logic.MergeValidationError) as exc:
         asyncio.run(merge_logic.validate_merge_batch(player, instances))

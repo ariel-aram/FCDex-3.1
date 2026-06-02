@@ -13,6 +13,7 @@ attack_bonus = 15
 health_bonus = 15
 requires_common = true
 ball_country = ""
+emoji = "🔨"
 
 [[level]]
 level = 2
@@ -21,6 +22,7 @@ attack_bonus = 35
 health_bonus = 35
 requires_common = false
 ball_country = ""
+emoji = "🔥"
 
 [[level]]
 level = 3
@@ -29,6 +31,7 @@ attack_bonus = 60
 health_bonus = 60
 requires_common = false
 ball_country = ""
+emoji = "💠"
 
 [[level]]
 level = 4
@@ -37,6 +40,7 @@ attack_bonus = 90
 health_bonus = 90
 requires_common = false
 ball_country = ""
+emoji = "⭐"
 
 [[level]]
 level = 5
@@ -45,6 +49,7 @@ attack_bonus = 125
 health_bonus = 125
 requires_common = false
 ball_country = ""
+emoji = "🌟"
 
 [[level]]
 level = 6
@@ -53,6 +58,7 @@ attack_bonus = 165
 health_bonus = 165
 requires_common = false
 ball_country = ""
+emoji = "👑"
 
 [[level]]
 level = 7
@@ -61,3 +67,4 @@ attack_bonus = 210
 health_bonus = 210
 requires_common = false
 ball_country = ""
+emoji = "🏆"

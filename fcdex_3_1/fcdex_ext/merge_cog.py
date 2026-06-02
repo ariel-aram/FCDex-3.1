@@ -7,10 +7,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from ballsdex.core.utils.transformers import BallInstanceTransform
 from bd_models.models import Player
 from fcdex_3_1.fcdex_ext.merge_logic import MergeValidationError, validate_merge_batch
-from fcdex_3_1.fcdex_ext.merge_views import build_merge_confirm_view
+from fcdex_3_1.fcdex_ext.merge_views import MergeBallInstanceTransform, build_merge_confirm_view
 
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
@@ -19,17 +18,17 @@ log = logging.getLogger("fcdex_3_1.merge")
 
 
 def _collect_merge_cards(
-    card1: BallInstanceTransform,
-    card2: BallInstanceTransform | None = None,
-    card3: BallInstanceTransform | None = None,
-    card4: BallInstanceTransform | None = None,
-    card5: BallInstanceTransform | None = None,
-    card6: BallInstanceTransform | None = None,
-    card7: BallInstanceTransform | None = None,
-    card8: BallInstanceTransform | None = None,
-    card9: BallInstanceTransform | None = None,
-    card10: BallInstanceTransform | None = None,
-) -> list[BallInstanceTransform]:
+    card1: MergeBallInstanceTransform,
+    card2: MergeBallInstanceTransform | None = None,
+    card3: MergeBallInstanceTransform | None = None,
+    card4: MergeBallInstanceTransform | None = None,
+    card5: MergeBallInstanceTransform | None = None,
+    card6: MergeBallInstanceTransform | None = None,
+    card7: MergeBallInstanceTransform | None = None,
+    card8: MergeBallInstanceTransform | None = None,
+    card9: MergeBallInstanceTransform | None = None,
+    card10: MergeBallInstanceTransform | None = None,
+) -> list[MergeBallInstanceTransform]:
     return [
         card for card in (card1, card2, card3, card4, card5, card6, card7, card8, card9, card10) if card is not None
     ]
@@ -60,16 +59,16 @@ class MergeCog(commands.Cog):
     async def merge(
         self,
         interaction: discord.Interaction,
-        card1: BallInstanceTransform,
-        card2: BallInstanceTransform | None = None,
-        card3: BallInstanceTransform | None = None,
-        card4: BallInstanceTransform | None = None,
-        card5: BallInstanceTransform | None = None,
-        card6: BallInstanceTransform | None = None,
-        card7: BallInstanceTransform | None = None,
-        card8: BallInstanceTransform | None = None,
-        card9: BallInstanceTransform | None = None,
-        card10: BallInstanceTransform | None = None,
+        card1: MergeBallInstanceTransform,
+        card2: MergeBallInstanceTransform | None = None,
+        card3: MergeBallInstanceTransform | None = None,
+        card4: MergeBallInstanceTransform | None = None,
+        card5: MergeBallInstanceTransform | None = None,
+        card6: MergeBallInstanceTransform | None = None,
+        card7: MergeBallInstanceTransform | None = None,
+        card8: MergeBallInstanceTransform | None = None,
+        card9: MergeBallInstanceTransform | None = None,
+        card10: MergeBallInstanceTransform | None = None,
     ):
         cards = _collect_merge_cards(card1, card2, card3, card4, card5, card6, card7, card8, card9, card10)
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)

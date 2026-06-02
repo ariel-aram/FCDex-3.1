@@ -4,15 +4,24 @@ import logging
 from typing import TYPE_CHECKING, cast
 
 import discord
+from discord import app_commands
 from discord.ui import ActionRow, Button, Container, Separator, TextDisplay, button
+from django.db.models import Q
 
 from ballsdex.core.discord import LayoutView
+from ballsdex.core.utils.transformers import BallInstanceTransformer
 from bd_models.models import BallInstance, Player
 from fcdex_3_1.fcdex_ext.bd_helpers import format_instance, get_ball
-from fcdex_3_1.fcdex_ext.merge_levels import MAX_MERGE_LEVEL, format_level_table_row, get_merge_level_config
+from fcdex_3_1.fcdex_ext.merge_levels import (
+    MAX_MERGE_LEVEL,
+    format_level_table_row,
+    get_merge_level_config,
+    get_merge_level_emoji,
+)
 from fcdex_3_1.fcdex_ext.merge_logic import (
     MergeValidationError,
     execute_merge,
+    get_instance_merge_level,
     preview_merge_stats,
     validate_merge_batch,
 )
@@ -30,6 +39,52 @@ if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
 
 log = logging.getLogger("fcdex_3_1.merge.views")
+
+
+class MergeBallInstanceTransformer(BallInstanceTransformer):
+    """Card picker for /merge — hides max-tier (L7) forge results."""
+
+    def get_queryset(self):
+        max_cfg = get_merge_level_config(MAX_MERGE_LEVEL)
+        return (
+            super()
+            .get_queryset()
+            .filter(deleted=False)
+            .exclude(
+                Q(special__name=MERGE_SPECIAL_NAME)
+                & Q(attack_bonus=max_cfg.attack_bonus)
+                & Q(health_bonus=max_cfg.health_bonus)
+            )
+        )
+
+    async def get_options(self, interaction: discord.Interaction, value: str) -> list[app_commands.Choice[int]]:
+        choices = await super().get_options(interaction, value)
+        if not choices:
+            return choices
+
+        pks = [int(choice.value, 16) for choice in choices]
+        instances = {
+            instance.pk: instance
+            async for instance in BallInstance.objects.filter(pk__in=pks).select_related("special")
+        }
+
+        enriched: list[app_commands.Choice[int]] = []
+        for choice in choices:
+            instance = instances.get(int(choice.value, 16))
+            if instance is None:
+                enriched.append(choice)
+                continue
+            merge_level = await get_instance_merge_level(instance)
+            if merge_level:
+                prefix = f"{get_merge_level_emoji(merge_level)} "
+                name = f"{prefix}{choice.name}"[:100]
+                enriched.append(app_commands.Choice(name=name, value=choice.value))
+            else:
+                enriched.append(choice)
+        return enriched
+
+
+MergeBallInstanceTransform = app_commands.Transform[BallInstance, MergeBallInstanceTransformer]
 
 
 class MergeConfirmRow(ActionRow):
@@ -83,7 +138,6 @@ async def build_merge_confirm_view(
     labels = [await format_instance(instance) for instance in instances]
     ball = await get_ball(instances[0])
     special = await get_merge_special()
-    emoji = special.emoji or "✨"
     quota_settings = await get_merge_quota_settings()
     quota_snapshot = await get_merge_quota_snapshot(player)
     quota_block = format_quota_status_block(quota_snapshot, settings_period_days=quota_settings.period_days)
@@ -91,10 +145,11 @@ async def build_merge_confirm_view(
     try:
         target_level = await validate_merge_batch(player, instances)
         cfg = get_merge_level_config(target_level)
+        level_emoji = get_merge_level_emoji(target_level)
         base_attack, base_health, final_attack, final_health = preview_merge_stats(ball, target_level)
         level_line = (
-            f"**Forge level {target_level}** · `{len(instances)}` inputs → "
-            f"**{emoji} {MERGE_SPECIAL_NAME}** `{ball.country}`\n"
+            f"{level_emoji} **Forge L{target_level}** · `{len(instances)}` inputs → "
+            f"**{special.emoji or level_emoji} {MERGE_SPECIAL_NAME}** `{ball.country}`\n"
             f"Stats: **{base_attack}**/{base_health} → **{final_attack}** ATK · **{final_health}** HP "
             f"(`+{cfg.attack_bonus}%` / `+{cfg.health_bonus}%`)"
         )
@@ -111,8 +166,8 @@ async def build_merge_confirm_view(
         f"{level_line}\n\n"
         f"**Inputs ({len(instances)})**\n{card_list}\n\n"
         f"{quota_block}\n\n"
-        f"-# Same clubball only · level 1 needs **common** copies · "
-        f"levels **1→2→…→7** only · level **{MAX_MERGE_LEVEL}** can't merge again.\n"
+        f"-# Same **clubball** only (not just country) · L1 needs **common** copies · "
+        f"forge **L1→L2→…→L7** · {get_merge_level_emoji(MAX_MERGE_LEVEL)} **L{MAX_MERGE_LEVEL}** can't merge again.\n"
         f"-# Tier guide: {tier_guide}"
     )
 

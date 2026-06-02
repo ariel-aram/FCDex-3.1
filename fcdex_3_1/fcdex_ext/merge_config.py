@@ -13,6 +13,9 @@ DEFAULT_WEEKLY_CAP = 5
 DEFAULT_PERIOD_DAYS = 7
 
 
+_BUILTIN_LEVEL_EMOJIS: dict[int, str] = {1: "🔨", 2: "🔥", 3: "💠", 4: "⭐", 5: "🌟", 6: "👑", 7: "🏆"}
+
+
 @dataclass(frozen=True, slots=True)
 class MergeLevelConfig:
     level: int
@@ -21,16 +24,66 @@ class MergeLevelConfig:
     health_bonus: int
     requires_common_inputs: bool
     ball_country: str = ""
+    emoji: str = ""
 
 
 _BUILTIN_LEVELS: dict[int, MergeLevelConfig] = {
-    1: MergeLevelConfig(level=1, input_count=10, attack_bonus=15, health_bonus=15, requires_common_inputs=True),
-    2: MergeLevelConfig(level=2, input_count=8, attack_bonus=35, health_bonus=35, requires_common_inputs=False),
-    3: MergeLevelConfig(level=3, input_count=6, attack_bonus=60, health_bonus=60, requires_common_inputs=False),
-    4: MergeLevelConfig(level=4, input_count=5, attack_bonus=90, health_bonus=90, requires_common_inputs=False),
-    5: MergeLevelConfig(level=5, input_count=4, attack_bonus=125, health_bonus=125, requires_common_inputs=False),
-    6: MergeLevelConfig(level=6, input_count=3, attack_bonus=165, health_bonus=165, requires_common_inputs=False),
-    7: MergeLevelConfig(level=7, input_count=2, attack_bonus=210, health_bonus=210, requires_common_inputs=False),
+    1: MergeLevelConfig(
+        level=1,
+        input_count=10,
+        attack_bonus=15,
+        health_bonus=15,
+        requires_common_inputs=True,
+        emoji=_BUILTIN_LEVEL_EMOJIS[1],
+    ),
+    2: MergeLevelConfig(
+        level=2,
+        input_count=8,
+        attack_bonus=35,
+        health_bonus=35,
+        requires_common_inputs=False,
+        emoji=_BUILTIN_LEVEL_EMOJIS[2],
+    ),
+    3: MergeLevelConfig(
+        level=3,
+        input_count=6,
+        attack_bonus=60,
+        health_bonus=60,
+        requires_common_inputs=False,
+        emoji=_BUILTIN_LEVEL_EMOJIS[3],
+    ),
+    4: MergeLevelConfig(
+        level=4,
+        input_count=5,
+        attack_bonus=90,
+        health_bonus=90,
+        requires_common_inputs=False,
+        emoji=_BUILTIN_LEVEL_EMOJIS[4],
+    ),
+    5: MergeLevelConfig(
+        level=5,
+        input_count=4,
+        attack_bonus=125,
+        health_bonus=125,
+        requires_common_inputs=False,
+        emoji=_BUILTIN_LEVEL_EMOJIS[5],
+    ),
+    6: MergeLevelConfig(
+        level=6,
+        input_count=3,
+        attack_bonus=165,
+        health_bonus=165,
+        requires_common_inputs=False,
+        emoji=_BUILTIN_LEVEL_EMOJIS[6],
+    ),
+    7: MergeLevelConfig(
+        level=7,
+        input_count=2,
+        attack_bonus=210,
+        health_bonus=210,
+        requires_common_inputs=False,
+        emoji=_BUILTIN_LEVEL_EMOJIS[7],
+    ),
 }
 
 
@@ -43,6 +96,7 @@ def _parse_level_row(row: dict) -> MergeLevelConfig | None:
         level = int(row["level"])
         if level < 1 or level > MAX_MERGE_LEVEL:
             return None
+        emoji = str(row.get("emoji") or "").strip() or _BUILTIN_LEVEL_EMOJIS.get(level, "✨")
         return MergeLevelConfig(
             level=level,
             input_count=int(row["input_count"]),
@@ -50,6 +104,7 @@ def _parse_level_row(row: dict) -> MergeLevelConfig | None:
             health_bonus=int(row["health_bonus"]),
             requires_common_inputs=bool(row.get("requires_common", False)),
             ball_country=str(row.get("ball_country") or "").strip(),
+            emoji=emoji,
         )
     except (KeyError, TypeError, ValueError):
         return None

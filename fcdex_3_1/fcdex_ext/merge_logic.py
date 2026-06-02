@@ -10,8 +10,10 @@ from bd_models.models import Ball, BallInstance, Player, Special, balls
 from fcdex_3_1.fcdex_ext.bd_helpers import format_instance, get_ball, instance_attack, instance_health
 from fcdex_3_1.fcdex_ext.merge_levels import (
     MAX_MERGE_LEVEL,
-    detect_target_level,
+    format_merge_count_mismatch,
+    format_merge_input_requirement,
     get_merge_level_config,
+    get_merge_level_emoji,
     level_requires_ball_country,
     resolve_merge_level_from_bonuses,
 )
@@ -94,8 +96,28 @@ async def _validate_ball_country_for_level(ball: Ball, target_level: int) -> Non
     required = level_requires_ball_country(target_level)
     if required and ball.country.lower() != required.lower():
         raise MergeValidationError(
-            f"Forge **level {target_level}** only accepts **{required}** clubballs (you selected **{ball.country}**)."
+            f"{get_merge_level_emoji(target_level)} **Forge L{target_level}** only accepts "
+            f"**{required}** clubballs (you selected **{ball.country}**)."
         )
+
+
+async def _resolve_unanimous_input_level(instances: list[BallInstance]) -> int:
+    input_levels: list[int] = []
+    for instance in instances:
+        input_level = await get_instance_merge_level(instance)
+        if input_level is None:
+            raise MergeValidationError(
+                "One of these cards is a legacy merge result and can't be used in the 7-tier forge."
+            )
+        input_levels.append(input_level)
+
+    unique_levels = set(input_levels)
+    if len(unique_levels) != 1:
+        raise MergeValidationError(
+            "All inputs must be the same forge tier — either all **common** clubballs "
+            "or all the same **forge level** cards."
+        )
+    return input_levels[0]
 
 
 async def validate_merge_batch(player: Player, instances: list[BallInstance]) -> int:
@@ -106,23 +128,23 @@ async def validate_merge_batch(player: Player, instances: list[BallInstance]) ->
     if duplicates:
         raise MergeValidationError("Each card can only be selected once.")
 
-    target_level = detect_target_level(len(instances))
-    if target_level is None:
-        valid = ", ".join(str(get_merge_level_config(level).input_count) for level in range(1, MAX_MERGE_LEVEL + 1))
-        raise MergeValidationError(
-            f"This forge needs a valid card count for levels 1–{MAX_MERGE_LEVEL} "
-            f"({valid} cards). You picked {len(instances)}."
-        )
+    input_level = await _resolve_unanimous_input_level(instances)
+    if input_level >= MAX_MERGE_LEVEL:
+        raise MergeValidationError(merge_special_blocked_message(MERGE_SPECIAL_NAME, max_level=MAX_MERGE_LEVEL))
 
+    target_level = input_level + 1
     cfg = get_merge_level_config(target_level)
+    selected_count = len(instances)
+
     ball_ids = {instance.ball_id for instance in instances}
     if len(ball_ids) != 1:
-        raise MergeValidationError("All inputs must be the same clubball type (same country).")
+        raise MergeValidationError("All inputs must be the **same clubball** (same name — not just the same country).")
+
+    if selected_count != cfg.input_count:
+        raise MergeValidationError(format_merge_count_mismatch(input_level, target_level, selected_count))
 
     result_ball = await get_ball(instances[0])
     await _validate_ball_country_for_level(result_ball, target_level)
-
-    required_input_level = target_level - 1
     await _validate_merge_quota(player)
 
     for instance in instances:
@@ -135,30 +157,10 @@ async def validate_merge_batch(player: Player, instances: list[BallInstance]) ->
         if await instance.is_locked():
             raise MergeValidationError("One of these cards is locked for a trade.")
 
-        input_level = await get_instance_merge_level(instance)
-        if input_level is None:
-            raise MergeValidationError(
-                "One of these cards is a legacy merge result and can't be used in the 7-tier forge."
-            )
-        if input_level == MAX_MERGE_LEVEL:
-            raise MergeValidationError(merge_special_blocked_message(MERGE_SPECIAL_NAME, max_level=MAX_MERGE_LEVEL))
-        if input_level != required_input_level:
-            if required_input_level == 0:
-                raise MergeValidationError(
-                    f"Forge **level {target_level}** needs {cfg.input_count} plain **common** copies "
-                    "of the same clubball."
-                )
-            raise MergeValidationError(
-                f"Forge **level {target_level}** needs {cfg.input_count} forge **level {required_input_level}** "
-                "cards of the same clubball."
-            )
-
-        if required_input_level == 0:
+        if input_level == 0:
             ball = await get_ball(instance)
             if not await is_common_ball(ball):
-                raise MergeValidationError(
-                    f"Forge **level 1** only accepts **common** clubballs ({cfg.input_count} matching copies)."
-                )
+                raise MergeValidationError(format_merge_input_requirement(0, target_level))
 
     return target_level
 
@@ -218,9 +220,9 @@ async def execute_merge(
 
     result_label = await format_instance(new_instance)
     _, _, final_attack, final_health = preview_merge_stats(result_ball, target_level)
-    special_tag = merge_special.emoji or "✨"
+    level_tag = get_merge_level_emoji(target_level)
     summary = (
-        f"{special_tag} **{merge_special.name}** · forge **level {target_level}** complete!\n"
+        f"{level_tag} **{merge_special.name}** · forge **L{target_level}** complete!\n"
         f"You forged `{result_label}` — **`+{cfg.attack_bonus}%` ATK / `+{cfg.health_bonus}%` HP** "
         f"(≈ **{final_attack}** ATK · **{final_health}** HP)."
     )
