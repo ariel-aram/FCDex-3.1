@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 import discord
 
+from fcdex_3_1.fcdex_ext.boss_raid import raid_scope_id
+
 
 @dataclass(frozen=True, slots=True)
 class AdminContext:
@@ -21,7 +23,7 @@ class AdminContext:
         return cls(
             guild_id=guild_id,
             channel_id=channel_id,
-            scope_id=channel_id,
+            scope_id=raid_scope_id(guild_id, channel_id),
             reward_server_id=guild_id,
         )
 

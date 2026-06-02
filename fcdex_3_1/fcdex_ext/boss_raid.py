@@ -27,8 +27,8 @@ class BossParticipant:
 
 @dataclass
 class BossRaid:
-    guild_id: int  # scope key: guild id or DM channel id
-    channel_id: int
+    scope_id: int  # guild id in servers, DM channel id in DMs
+    channel_id: int  # channel where the raid was announced
     boss_ball_id: int
     max_hp: int
     current_hp: int
@@ -64,9 +64,9 @@ def _raids() -> dict[int, BossRaid]:
 _ACTIVE_RAIDS: dict[int, BossRaid] = {}
 
 
-def raid_scope_id(_guild_id: int | None, channel_id: int) -> int:
-    """Raids are scoped to the channel (guild channel or DM) — always reliable."""
-    return channel_id
+def raid_scope_id(guild_id: int | None, channel_id: int) -> int:
+    """Server raids are guild-wide; DMs use the DM channel id."""
+    return guild_id if guild_id is not None else channel_id
 
 
 def get_raid(scope_id: int | None) -> BossRaid | None:
@@ -91,7 +91,7 @@ def start_raid(
     if scope_id in _ACTIVE_RAIDS:
         raise ValueError("A boss raid is already active here.")
     raid = BossRaid(
-        guild_id=scope_id,
+        scope_id=scope_id,
         channel_id=channel_id,
         boss_ball_id=boss_ball.pk,
         max_hp=hp,
@@ -108,7 +108,7 @@ def end_raid(scope_id: int) -> BossRaid | None:
 
 
 def join_raid(raid: BossRaid, user_id: int) -> tuple[bool, str]:
-    if raid.phase != "join":
+    if raid.phase not in ("join", "pick"):
         return False, "Registration is closed — wait for the next raid."
     if user_id in raid.participants:
         return False, "You already joined this raid."
@@ -171,12 +171,24 @@ async def resolve_round(raid: BossRaid) -> str:
     lines: list[str] = [f"### Round **{raid.round}/{MAX_ROUNDS}** results"]
     if raid.is_attack_round:
         total = 0
+        locked = 0
+        skipped = 0
         for participant in raid.participants.values():
-            if participant.disqualified or participant.selected_instance_id is None:
+            if participant.disqualified:
                 continue
+            if participant.selected_instance_id is None:
+                skipped += 1
+                continue
+            locked += 1
             try:
                 inst = await BallInstance.objects.select_related("ball").aget(pk=participant.selected_instance_id)
             except BallInstance.DoesNotExist:
+                skipped += 1
+                log.warning(
+                    "Boss raid: missing instance %s for <@%s>",
+                    participant.selected_instance_id,
+                    participant.discord_id,
+                )
                 continue
             ball = inst.ball
             power = instance_attack(inst, ball) + instance_health(inst, ball)
@@ -187,10 +199,23 @@ async def resolve_round(raid: BossRaid) -> str:
             raid.used_instance_ids.add(inst.pk)
             lines.append(f"<@{participant.discord_id}> dealt **{dmg:,}** with {ball.country}")
         raid.current_hp = max(0, raid.current_hp - total)
+        if total == 0:
+            if not raid.participants:
+                lines.append("\n*No damage — nobody joined the raid yet.*")
+            elif locked == 0:
+                lines.append(
+                    f"\n*No damage — **{skipped}** player(s) did not lock a clubball in `/fcdex boss` "
+                    "(same server/DM as the announcement).*"
+                )
+            else:
+                lines.append("\n*No damage — locked cards could not be resolved.*")
         lines.append(f"\nBoss HP: **{raid.current_hp:,}** / **{raid.max_hp:,}**")
     else:
         boss_hit = random.randint(*DAMAGE_RNG)
-        lines.append(f"Boss retaliates for **{boss_hit:,}** (flavour — raid is damage-race).")
+        lines.append(
+            f"**Defend round** — no boss HP loss. Boss retaliates for **{boss_hit:,}** "
+            "(flavour only; use **Attack round** for real damage)."
+        )
     raid.phase = "resolve"
     if raid.rounds_complete:
         lines.append("\n-# All **3** rounds are done — admins: **Conclude** to award the winner.")
@@ -246,7 +271,7 @@ async def conclude_raid(raid: BossRaid, *, grant_reward: bool) -> tuple[str, int
     else:
         lines.append("\nNo winner recorded.")
 
-    end_raid(raid.guild_id)
+    end_raid(raid.scope_id)
     return "\n".join(lines), winner_id
 
 

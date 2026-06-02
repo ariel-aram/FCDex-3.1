@@ -45,7 +45,8 @@ class BossJoinView(View):
 
     @discord.ui.button(label="Join boss raid", style=discord.ButtonStyle.primary, emoji="⚔️")
     async def join(self, interaction: Interaction, button: discord.ui.Button):
-        raid = get_raid(self.scope_id)
+        ctx = admin_context(interaction)
+        raid = get_raid(ctx.scope_id) or get_raid(self.scope_id)
         if raid is None:
             await interaction.response.send_message("This raid has ended.", ephemeral=True)
             return
@@ -282,6 +283,8 @@ class BossAdminControls(ActionRow):
             await interaction.response.send_message("No active raid.", ephemeral=True)
             return
         ok, message = boss_raid.begin_round(raid, attack_phase=attack)
+        if ok:
+            message += f"\n-# **{len(raid.participants)}** joined — players lock cards in `/fcdex boss`."
         layout = await build_boss_admin_layout(ctx, self.owner_id, notice=message)
         await interaction.response.edit_message(view=layout)
 
@@ -305,7 +308,8 @@ async def build_boss_player_layout(ctx: AdminContext, user_id: int, *, notice: s
     container = Container()
 
     if raid is None:
-        container.add_item(TextDisplay("# 👑 Boss raid\n*No active raid in this channel.*"))
+        scope_hint = "this server" if ctx.guild_id else "this DM"
+        container.add_item(TextDisplay(f"# 👑 Boss raid\n*No active raid in {scope_hint}.*"))
         layout.add_item(container)
         return layout
 
@@ -328,8 +332,10 @@ async def build_boss_player_layout(ctx: AdminContext, user_id: int, *, notice: s
         container.add_item(BossPlayerJoinRow(user_id, ctx))
         container.add_item(TextDisplay("-# Or tap **Join** on the raid announcement message."))
     elif raid.phase == "pick" and participant and not participant.disqualified:
+        if participant.selected_instance_id is not None:
+            header += f"\n-# Locked card `#{participant.selected_instance_id}` — wait for **Resolve**."
         player = await Player.objects.filter(discord_id=user_id).afirst()
-        if player:
+        if player and participant.selected_instance_id is None:
             instances = [
                 i
                 async for i in BallInstance.objects.filter(player=player, deleted=False)
@@ -353,8 +359,9 @@ async def build_boss_admin_layout(ctx: AdminContext, owner_id: int, *, notice: s
     container = Container()
 
     if raid is None:
+        scope_hint = "this server" if ctx.guild_id else "this DM"
         body = (
-            "*No raid in this channel — pick a boss below or use **Start by PK / name** "
+            f"*No raid in {scope_hint} — pick a boss below or use **Start by PK / name** "
             "(clubball PK, country, optional reward collectible).*"
         )
     else:
@@ -375,7 +382,8 @@ async def build_boss_admin_layout(ctx: AdminContext, owner_id: int, *, notice: s
             truncate_text(
                 "# 👑 Boss admin\n"
                 "-# Works in servers and DMs · Components v2.\n"
-                "-# Set boss + optional **reward clubball** · needs **Boss** special for tagged wins."
+                "-# Set boss + optional **reward clubball** · **Attack round** deals HP damage.\n"
+                "-# **Defend round** is flavour-only (no boss HP loss). Needs **Boss** special for tagged wins."
             )
         )
     )

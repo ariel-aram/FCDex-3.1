@@ -1,20 +1,26 @@
 from __future__ import annotations
 
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+
 from fcdex_3_1.fcdex_ext import boss_raid
-from fcdex_3_1.fcdex_ext.boss_raid import MAX_ROUNDS, BossRaid, can_start_round
+from fcdex_3_1.fcdex_ext.boss_raid import MAX_ROUNDS, BossParticipant, BossRaid, can_start_round
 
 
 def _make_raid(**kwargs) -> BossRaid:
-    defaults = dict(guild_id=1, channel_id=2, boss_ball_id=10, max_hp=1000, current_hp=1000)
+    defaults = dict(scope_id=1, channel_id=2, boss_ball_id=10, max_hp=1000, current_hp=1000)
     defaults.update(kwargs)
     return BossRaid(**defaults)
 
 
-def test_join_only_during_registration():
+def test_join_during_join_and_pick_not_after_resolve():
     raid = _make_raid(phase="pick")
-    ok, _ = boss_raid.join_raid(raid, 99)
+    ok, _ = boss_raid.join_raid(raid, 100)
+    assert ok
+    raid.phase = "resolve"
+    ok, _ = boss_raid.join_raid(raid, 101)
     assert not ok
-    raid.phase = "join"
+    raid = _make_raid(phase="join")
     ok, msg = boss_raid.join_raid(raid, 99)
     assert ok
     assert "joined" in msg.lower()
@@ -58,3 +64,52 @@ def test_reward_ball_defaults_to_boss():
     assert raid.reward_ball_id_effective == 7
     raid.reward_ball_id = 42
     assert raid.reward_ball_id_effective == 42
+
+
+def test_resolve_round_deals_damage_on_attack_round():
+    raid = _make_raid(phase="pick", round=1, is_attack_round=True, current_hp=5000)
+    raid.participants[42] = BossParticipant(discord_id=42, selected_instance_id=7)
+
+    ball = MagicMock()
+    ball.country = "Testland"
+    ball.attack = 50
+    ball.health = 50
+
+    inst = MagicMock()
+    inst.pk = 7
+    inst.ball = ball
+
+    mock_qs = MagicMock()
+    mock_qs.aget = AsyncMock(return_value=inst)
+    mock_objects = MagicMock()
+    mock_objects.select_related.return_value = mock_qs
+
+    with patch.object(boss_raid.BallInstance, "objects", mock_objects):
+        log = asyncio.run(boss_raid.resolve_round(raid))
+
+    assert raid.current_hp < 5000
+    assert raid.participants[42].total_damage > 0
+    assert "dealt" in log.lower()
+    assert raid.phase == "resolve"
+
+
+def test_resolve_round_no_hp_loss_on_defend_round():
+    raid = _make_raid(phase="pick", round=1, is_attack_round=False, current_hp=5000)
+    raid.participants[42] = BossParticipant(discord_id=42, selected_instance_id=7)
+
+    log = asyncio.run(boss_raid.resolve_round(raid))
+
+    assert raid.current_hp == 5000
+    assert raid.participants[42].total_damage == 0
+    assert "defend" in log.lower()
+    assert raid.phase == "resolve"
+
+
+def test_resolve_round_reports_missing_picks():
+    raid = _make_raid(phase="pick", round=1, is_attack_round=True, current_hp=5000)
+    raid.participants[42] = BossParticipant(discord_id=42)
+
+    log = asyncio.run(boss_raid.resolve_round(raid))
+
+    assert raid.current_hp == 5000
+    assert "did not lock" in log.lower()
