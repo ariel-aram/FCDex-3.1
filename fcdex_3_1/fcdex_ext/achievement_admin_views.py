@@ -10,6 +10,7 @@ from ballsdex.core.discord import LayoutView
 from fcdex_3_1.fcdex_ext.achievement_admin_util import (
     _TYPE_LABELS,
     _TYPE_VALUES,
+    _select_emoji,
     normalize_achievement_type,
     parse_bool_field,
 )
@@ -205,7 +206,7 @@ class AchievementToggleSelect(discord.ui.Select):
                 description=(
                     f"{'On' if a.enabled else 'Off'} · {_TYPE_LABELS.get(a.achievement_type, a.achievement_type)}"
                 )[:100],
-                emoji=a.emoji or None,
+                emoji=_select_emoji(a.emoji),
             )
             for a in achievements[:25]
         ]
@@ -234,7 +235,7 @@ class AchievementEditSelect(discord.ui.Select):
                 label=a.name[:100],
                 value=str(a.pk),
                 description=f"goal {a.required_count} · +{a.reward_money:,} coins"[:100],
-                emoji=a.emoji or None,
+                emoji=_select_emoji(a.emoji),
             )
             for a in achievements[:25]
         ]
@@ -253,7 +254,10 @@ class AchievementDeleteSelect(discord.ui.Select):
         self.owner_id = owner_id
         options = [
             discord.SelectOption(
-                label=a.name[:100], value=str(a.pk), description="Select to confirm delete"[:100], emoji=a.emoji or None
+                label=a.name[:100],
+                value=str(a.pk),
+                description="Select to confirm delete"[:100],
+                emoji=_select_emoji(a.emoji),
             )
             for a in achievements[:25]
         ]
