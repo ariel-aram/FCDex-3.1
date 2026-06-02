@@ -66,9 +66,7 @@ async def is_common_ball(ball: Ball) -> bool:
 
 
 async def instance_already_used_in_merge(instance_id: int) -> bool:
-    if await MergeLog.objects.filter(
-        Q(source_ball1_id=instance_id) | Q(source_ball2_id=instance_id) | Q(result_ball_id=instance_id)
-    ).aexists():
+    if await MergeLog.objects.filter(Q(source_ball1_id=instance_id) | Q(source_ball2_id=instance_id)).aexists():
         return True
     return await MergeLog.objects.filter(source_ids__contains=instance_id).aexists()
 
@@ -158,6 +156,8 @@ async def validate_merge_batch(player: Player, instances: list[BallInstance]) ->
             raise MergeValidationError("One of these cards is locked for a trade.")
 
         if input_level == 0:
+            if instance.special_id is not None:
+                raise MergeValidationError("Forge L1 only accepts plain common clubballs without any special.")
             ball = await get_ball(instance)
             if not await is_common_ball(ball):
                 raise MergeValidationError(format_merge_input_requirement(0, target_level))

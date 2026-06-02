@@ -129,7 +129,7 @@ def test_merge_special_blocked_message_for_max_tier():
 
 def test_merge_level_table_has_seven_tiers_with_expected_counts():
     assert len(MERGE_LEVELS) == 7
-    assert [MERGE_LEVELS[level].input_count for level in range(1, 8)] == [10, 8, 6, 5, 4, 3, 2]
+    assert [MERGE_LEVELS[level].input_count for level in range(1, 8)] == [10, 9, 7, 5, 4, 3, 2]
 
 
 def test_merge_level_bonuses_increase_each_tier():
@@ -143,9 +143,11 @@ def test_merge_level_bonuses_increase_each_tier():
 
 def test_detect_target_level_from_card_count():
     assert detect_target_level(10) == 1
-    assert detect_target_level(8) == 2
+    assert detect_target_level(9) == 2
+    assert detect_target_level(7) == 3
+    assert detect_target_level(8) is None
     assert detect_target_level(2) == 7
-    assert detect_target_level(7) is None
+    assert detect_target_level(6) is None
 
 
 def test_resolve_merge_level_from_bonuses():
@@ -348,7 +350,7 @@ def test_validate_merge_batch_level_one_rejects_non_common():
     assert "common" in exc.value.message.lower()
 
 
-def test_validate_merge_batch_level_two_requires_eight_level_one_forge_cards():
+def test_validate_merge_batch_level_two_requires_nine_level_one_forge_cards():
     merge_logic, _ = _load_merge_logic_for_validation_tests()
     player = SimpleNamespace(pk=1)
     merge_logic.get_merge_special = AsyncMock(return_value=SimpleNamespace(pk=42, name="FCDex Merge"))
@@ -357,10 +359,22 @@ def test_validate_merge_batch_level_two_requires_eight_level_one_forge_cards():
         _make_instance(
             pk=i, player_id=1, ball_id=1, special_id=42, attack_bonus=cfg.attack_bonus, health_bonus=cfg.health_bonus
         )
-        for i in range(1, 9)
+        for i in range(1, 10)
     ]
 
     assert asyncio.run(merge_logic.validate_merge_batch(player, instances)) == 2
+
+
+def test_validate_merge_batch_level_one_rejects_special_common():
+    merge_logic, _ = _load_merge_logic_for_validation_tests()
+    player = SimpleNamespace(pk=1)
+    merge_logic.get_merge_special = AsyncMock(return_value=SimpleNamespace(pk=42, name="FCDex Merge"))
+    instances = [_make_instance(pk=i, player_id=1, ball_id=1, special_id=99) for i in range(1, 11)]
+
+    with pytest.raises(merge_logic.MergeValidationError) as exc:
+        asyncio.run(merge_logic.validate_merge_batch(player, instances))
+
+    assert "without any special" in exc.value.message.lower()
 
 
 def test_validate_merge_batch_blocks_max_tier_inputs():

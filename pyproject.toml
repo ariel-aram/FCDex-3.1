@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fcdex-3-1"
-version = "2.4.6"
+version = "2.4.7"
 description = "FCDex 3.1 — packs, craft/SBC, battles, tournaments, quests, shop, and more for BallsDex V3"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -17,9 +17,9 @@ readme = "README.md"
 dependencies = []
 
 [project.urls]
-Repository = "https://github.com/ariel-aram/FCDex-3.0"
-Documentation = "https://github.com/ariel-aram/FCDex-3.0#readme"
-Issues = "https://github.com/ariel-aram/FCDex-3.0/issues"
+Repository = "https://github.com/ariel-aram/FCDex-3.1"
+Documentation = "https://github.com/ariel-aram/FCDex-3.1#readme"
+Issues = "https://github.com/ariel-aram/FCDex-3.1/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

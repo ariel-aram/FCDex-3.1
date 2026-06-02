@@ -38,7 +38,7 @@ _BUILTIN_LEVELS: dict[int, MergeLevelConfig] = {
     ),
     2: MergeLevelConfig(
         level=2,
-        input_count=8,
+        input_count=9,
         attack_bonus=35,
         health_bonus=35,
         requires_common_inputs=False,
@@ -46,7 +46,7 @@ _BUILTIN_LEVELS: dict[int, MergeLevelConfig] = {
     ),
     3: MergeLevelConfig(
         level=3,
-        input_count=6,
+        input_count=7,
         attack_bonus=60,
         health_bonus=60,
         requires_common_inputs=False,
