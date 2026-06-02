@@ -246,13 +246,9 @@ class BossAdminControls(ActionRow):
         self.owner_id = owner_id
         self.ctx = ctx
 
-    @button(label="Attack round", style=discord.ButtonStyle.danger, emoji="⚔️")
-    async def attack_round(self, interaction: Interaction, button: Button):
-        await self._round(interaction, attack=True)
-
-    @button(label="Defend round", style=discord.ButtonStyle.secondary, emoji="🛡️")
-    async def defend_round(self, interaction: Interaction, button: Button):
-        await self._round(interaction, attack=False)
+    @button(label="Start round", style=discord.ButtonStyle.danger, emoji="⚔️")
+    async def start_round(self, interaction: Interaction, button: Button):
+        await self._start_round(interaction)
 
     @button(label="Resolve", style=discord.ButtonStyle.primary, emoji="✅")
     async def resolve(self, interaction: Interaction, button: Button):
@@ -276,13 +272,13 @@ class BossAdminControls(ActionRow):
         layout = await build_boss_admin_layout(ctx, self.owner_id, notice=summary)
         await interaction.response.edit_message(view=layout)
 
-    async def _round(self, interaction: Interaction, *, attack: bool) -> None:
+    async def _start_round(self, interaction: Interaction) -> None:
         ctx = admin_context(interaction)
         raid = get_raid(ctx.scope_id)
         if raid is None:
             await interaction.response.send_message("No active raid.", ephemeral=True)
             return
-        ok, message = boss_raid.begin_round(raid, attack_phase=attack)
+        ok, message = boss_raid.begin_round(raid)
         if ok:
             message += f"\n-# **{len(raid.participants)}** joined — players lock cards in `/fcdex boss`."
         layout = await build_boss_admin_layout(ctx, self.owner_id, notice=message)
@@ -325,6 +321,10 @@ async def build_boss_player_layout(ctx: AdminContext, user_id: int, *, notice: s
         header += f"\n\n{notice}"
     if participant:
         header += f"\n\nYour damage: **{participant.total_damage:,}**"
+    if raid.phase == "pick" and participant and participant.selected_instance_id is not None:
+        header += f"\n\n-# Locked card `#{participant.selected_instance_id}` — waiting for admin **Resolve**."
+    elif raid.phase == "pick" and participant and not participant.disqualified:
+        header += "\n\n-# Pick a clubball below — locked cards deal damage when admin **Resolve**s."
     container.add_item(TextDisplay(truncate_text(header)))
 
     if raid.phase == "join":
@@ -332,8 +332,6 @@ async def build_boss_player_layout(ctx: AdminContext, user_id: int, *, notice: s
         container.add_item(BossPlayerJoinRow(user_id, ctx))
         container.add_item(TextDisplay("-# Or tap **Join** on the raid announcement message."))
     elif raid.phase == "pick" and participant and not participant.disqualified:
-        if participant.selected_instance_id is not None:
-            header += f"\n-# Locked card `#{participant.selected_instance_id}` — wait for **Resolve**."
         player = await Player.objects.filter(discord_id=user_id).afirst()
         if player and participant.selected_instance_id is None:
             instances = [
@@ -382,8 +380,8 @@ async def build_boss_admin_layout(ctx: AdminContext, owner_id: int, *, notice: s
             truncate_text(
                 "# 👑 Boss admin\n"
                 "-# Works in servers and DMs · Components v2.\n"
-                "-# Set boss + optional **reward clubball** · **Attack round** deals HP damage.\n"
-                "-# **Defend round** is flavour-only (no boss HP loss). Needs **Boss** special for tagged wins."
+                "-# Set boss + optional **reward clubball** · **Start round** → players pick in `/fcdex boss` → **Resolve**.\n"
+                "-# Needs **Boss** special for tagged wins."
             )
         )
     )

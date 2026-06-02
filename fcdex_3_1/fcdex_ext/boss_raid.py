@@ -12,7 +12,6 @@ log = logging.getLogger("fcdex_3_1.boss.raid")
 
 BossPhase = Literal["join", "pick", "resolve", "ended"]
 MAX_ROUNDS = 3
-DAMAGE_RNG = (200, 2_000)
 BOSS_SPECIAL_NAME = "Boss"
 
 
@@ -132,22 +131,21 @@ def can_start_round(raid: BossRaid) -> tuple[bool, str]:
     return False, "Cannot start a round right now."
 
 
-def begin_round(raid: BossRaid, *, attack_phase: bool) -> tuple[bool, str]:
+def begin_round(raid: BossRaid) -> tuple[bool, str]:
     ok, message = can_start_round(raid)
     if not ok:
         return False, message
     if raid.round >= MAX_ROUNDS:
         return False, "All 3 rounds complete — use **Conclude**."
     raid.round += 1
-    raid.is_attack_round = attack_phase
+    raid.is_attack_round = True
     raid.phase = "pick"
     for participant in raid.participants.values():
         participant.round_damage = 0
         participant.selected_instance_id = None
-    phase = "attack" if attack_phase else "defend"
     return (
         True,
-        f"Round **{raid.round}/{MAX_ROUNDS}** — **{phase}** phase. Players: pick a clubball in `/fcdex boss`.",
+        f"Round **{raid.round}/{MAX_ROUNDS}** — pick a clubball in `/fcdex boss`, then **Resolve**.",
     )
 
 
@@ -169,53 +167,48 @@ async def resolve_round(raid: BossRaid) -> str:
     if raid.phase != "pick":
         return "Nothing to resolve — start a round first."
     lines: list[str] = [f"### Round **{raid.round}/{MAX_ROUNDS}** results"]
-    if raid.is_attack_round:
-        total = 0
-        locked = 0
-        skipped = 0
-        for participant in raid.participants.values():
-            if participant.disqualified:
-                continue
-            if participant.selected_instance_id is None:
-                skipped += 1
-                continue
-            locked += 1
-            try:
-                inst = await BallInstance.objects.select_related("ball").aget(pk=participant.selected_instance_id)
-            except BallInstance.DoesNotExist:
-                skipped += 1
-                log.warning(
-                    "Boss raid: missing instance %s for <@%s>",
-                    participant.selected_instance_id,
-                    participant.discord_id,
-                )
-                continue
-            ball = inst.ball
-            power = instance_attack(inst, ball) + instance_health(inst, ball)
-            dmg = max(1, int(power * random.uniform(0.85, 1.15)))
-            participant.round_damage = dmg
-            participant.total_damage += dmg
-            total += dmg
-            raid.used_instance_ids.add(inst.pk)
-            lines.append(f"<@{participant.discord_id}> dealt **{dmg:,}** with {ball.country}")
-        raid.current_hp = max(0, raid.current_hp - total)
-        if total == 0:
-            if not raid.participants:
-                lines.append("\n*No damage — nobody joined the raid yet.*")
-            elif locked == 0:
-                lines.append(
-                    f"\n*No damage — **{skipped}** player(s) did not lock a clubball in `/fcdex boss` "
-                    "(same server/DM as the announcement).*"
-                )
-            else:
-                lines.append("\n*No damage — locked cards could not be resolved.*")
-        lines.append(f"\nBoss HP: **{raid.current_hp:,}** / **{raid.max_hp:,}**")
-    else:
-        boss_hit = random.randint(*DAMAGE_RNG)
-        lines.append(
-            f"**Defend round** — no boss HP loss. Boss retaliates for **{boss_hit:,}** "
-            "(flavour only; use **Attack round** for real damage)."
-        )
+    total = 0
+    locked = 0
+    skipped = 0
+    for participant in raid.participants.values():
+        if participant.disqualified:
+            continue
+        if participant.selected_instance_id is None:
+            skipped += 1
+            continue
+        locked += 1
+        try:
+            inst = await BallInstance.objects.select_related("ball").aget(pk=participant.selected_instance_id)
+        except BallInstance.DoesNotExist:
+            skipped += 1
+            log.warning(
+                "Boss raid: missing instance %s for <@%s>",
+                participant.selected_instance_id,
+                participant.discord_id,
+            )
+            continue
+        ball = inst.ball
+        power = instance_attack(inst, ball) + instance_health(inst, ball)
+        dmg = max(1, int(power * random.uniform(0.85, 1.15)))
+        participant.round_damage = dmg
+        participant.total_damage += dmg
+        total += dmg
+        raid.used_instance_ids.add(inst.pk)
+        lines.append(f"<@{participant.discord_id}> dealt **{dmg:,}** with {ball.country}")
+    raid.current_hp = max(0, raid.current_hp - total)
+    if total == 0:
+        if not raid.participants:
+            lines.append("\n*No damage — nobody joined the raid yet.*")
+        elif locked == 0:
+            lines.append(
+                f"\n*No damage — **{skipped}** player(s) did not lock a clubball in `/fcdex boss` "
+                "(same server/DM as the announcement).*"
+            )
+        else:
+            lines.append("\n*No damage — locked cards could not be resolved.*")
+    lines.append(f"\nBoss HP: **{raid.current_hp:,}** / **{raid.max_hp:,}**")
+    if raid.current_hp <= 0:
+        lines.append("\n☠️ **Boss defeated!** Admins: **Conclude** to award the winner.")
     raid.phase = "resolve"
     if raid.rounds_complete:
         lines.append("\n-# All **3** rounds are done — admins: **Conclude** to award the winner.")

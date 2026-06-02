@@ -31,12 +31,12 @@ def test_max_three_rounds():
     raid = _make_raid(phase="join")
     boss_raid.join_raid(raid, 1)
     for expected_round in (1, 2, 3):
-        ok, _ = boss_raid.begin_round(raid, attack_phase=True)
+        ok, _ = boss_raid.begin_round(raid)
         assert ok
         assert raid.round == expected_round
         assert raid.phase == "pick"
         raid.phase = "resolve"
-    ok, msg = boss_raid.begin_round(raid, attack_phase=True)
+    ok, msg = boss_raid.begin_round(raid)
     assert not ok
     assert "3 rounds" in msg.lower() or "conclude" in msg.lower()
     assert raid.round == MAX_ROUNDS
@@ -93,15 +93,29 @@ def test_resolve_round_deals_damage_on_attack_round():
     assert raid.phase == "resolve"
 
 
-def test_resolve_round_no_hp_loss_on_defend_round():
-    raid = _make_raid(phase="pick", round=1, is_attack_round=False, current_hp=5000)
+def test_resolve_round_boss_defeated_message():
+    raid = _make_raid(phase="pick", round=1, current_hp=50)
     raid.participants[42] = BossParticipant(discord_id=42, selected_instance_id=7)
 
-    log = asyncio.run(boss_raid.resolve_round(raid))
+    ball = MagicMock()
+    ball.country = "Testland"
+    ball.attack = 50
+    ball.health = 50
 
-    assert raid.current_hp == 5000
-    assert raid.participants[42].total_damage == 0
-    assert "defend" in log.lower()
+    inst = MagicMock()
+    inst.pk = 7
+    inst.ball = ball
+
+    mock_qs = MagicMock()
+    mock_qs.aget = AsyncMock(return_value=inst)
+    mock_objects = MagicMock()
+    mock_objects.select_related.return_value = mock_qs
+
+    with patch.object(boss_raid.BallInstance, "objects", mock_objects):
+        log = asyncio.run(boss_raid.resolve_round(raid))
+
+    assert raid.current_hp == 0
+    assert "defeated" in log.lower()
     assert raid.phase == "resolve"
 
 
