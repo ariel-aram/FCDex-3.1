@@ -56,17 +56,17 @@ class AdminHubControls(ActionRow):
         layout = await build_achievement_admin_layout(self.owner_id, ctx, notice="")
         await interaction.response.edit_message(view=layout)
 
-    @button(label="Merge", style=discord.ButtonStyle.primary, emoji="✨")
-    async def merge(self, interaction: Interaction, button: Button):
-        ctx = admin_context(interaction)
-        layout = await build_merge_admin_layout(self.owner_id, ctx, notice="")
-        await interaction.response.edit_message(view=layout)
-
 
 class AdminHubControlsRow2(ActionRow):
     def __init__(self, owner_id: int):
         super().__init__()
         self.owner_id = owner_id
+
+    @button(label="Merge", style=discord.ButtonStyle.primary, emoji="✨")
+    async def merge(self, interaction: Interaction, button: Button):
+        ctx = admin_context(interaction)
+        layout = await build_merge_admin_layout(self.owner_id, ctx, notice="")
+        await interaction.response.edit_message(view=layout)
 
     @button(label="Owners", style=discord.ButtonStyle.secondary, emoji="🔍")
     async def owners(self, interaction: Interaction, button: Button):
