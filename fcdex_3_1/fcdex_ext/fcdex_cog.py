@@ -17,7 +17,7 @@ from fcdex_3_1.fcdex_ext.leaderboard_logic import (
     resolve_scope,
 )
 from fcdex_3_1.fcdex_ext.leaderboard_views import build_leaderboard_layout
-from fcdex_3_1.fcdex_ext.quest_logic import DAILY_QUESTS, claim_quest, ensure_daily_quests
+from fcdex_3_1.fcdex_ext.quest_logic import claim_quest, ensure_daily_quests, list_quest_specs
 from fcdex_3_1.fcdex_ext.rarity_views import (
     CATEGORY_MODES,
     build_ball_rarity_layout,
@@ -64,7 +64,7 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
                 "### 📋 List regime\n`/fcdex list regime:<name>` — browse clubballs by regime",
                 "### 🛒 Shop\n`/fcdex shop` — buy bundles with coins",
                 "### 👑 Boss · 📜 Quests\n`/fcdex boss` — guild raid · `/fcdex quests` · `/fcdex quest claim`",
-                "### 🛡️ Admin\n`/fcdex admin` — shop, craft, boss & owners (Manage Server · ephemeral)",
+                "### 🛡️ Admin\n`/fcdex admin` — shop, craft, quests, boss & owners (Manage Server · ephemeral)",
             ],
             footer="-# Configure SBCs, achievements & tournaments in admin · FCDex 3.1",
         )
@@ -115,7 +115,7 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
         layout = build_panel_layout(title=entry.label, subtitle=entry.description, sections=[body])
         await interaction.response.send_message(view=layout, ephemeral=True)  # pyright: ignore[reportArgumentType]
 
-    @app_commands.command(name="admin", description="FCDex admin hub — shop, craft, boss, owners")
+    @app_commands.command(name="admin", description="FCDex admin hub — shop, craft, quests, boss, owners")
     @_admin_access_check()
     async def admin(self, interaction: discord.Interaction):
         guild_id = interaction.guild_id
@@ -134,7 +134,7 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
     async def quests(self, interaction: discord.Interaction):
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
         rows = await ensure_daily_quests(player)
-        labels = {k: lbl for k, lbl, _, _ in DAILY_QUESTS}
+        labels = {spec.quest_key: spec.label for spec in await list_quest_specs(enabled_only=False)}
         lines: list[str] = []
         for row in rows:
             status = "✅ claimed" if row.claimed_at else ("🎁 ready" if row.completed_at else "⏳")
@@ -142,17 +142,29 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
         layout = build_panel_layout(
             title="FCDex 3.1 · Daily quests",
             subtitle="Resets at midnight (server time)",
-            sections=["\n".join(lines), "-# `/fcdex quest claim:<key>` when complete"],
+            sections=["\n".join(lines), "-# `/fcdex quest claim key:<key>` when complete"],
         )
         await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]
 
+    async def _quest_key_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        specs = await list_quest_specs(enabled_only=True)
+        current_lower = current.lower()
+        choices: list[app_commands.Choice[str]] = []
+        for spec in specs:
+            if current_lower and current_lower not in spec.quest_key and current_lower not in spec.label.lower():
+                continue
+            choices.append(app_commands.Choice(name=spec.label[:100], value=spec.quest_key))
+        return choices[:25]
+
     @app_commands.command(name="quest", description="Claim a completed daily quest")
     @app_commands.describe(key="Quest key from `/fcdex quests`")
-    @app_commands.choices(key=[app_commands.Choice(name=label, value=key) for key, label, _, _ in DAILY_QUESTS])
-    async def quest_claim(self, interaction: discord.Interaction, key: app_commands.Choice[str]):
+    @app_commands.autocomplete(key=_quest_key_autocomplete)
+    async def quest_claim(self, interaction: discord.Interaction, key: str):
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
         await ensure_daily_quests(player)
-        ok, message = await claim_quest(player, key.value)
+        ok, message = await claim_quest(player, key.strip())
         if ok:
             layout = build_panel_layout(title="FCDex 3.1 · Quest claimed", sections=[message])
             await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]

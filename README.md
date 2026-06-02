@@ -75,7 +75,7 @@ Legacy & Main groups · grand final is **Legacy vs Main** semifinal winners.
 
 | Command | Description |
 | ------- | ----------- |
-| `/fcdex admin` | Hub — **Shop**, **Craft**, **Boss**, **Owners** (Manage Server) |
+| `/fcdex admin` | Hub — **Shop**, **Craft**, **Quests**, **Boss**, **Owners** (Manage Server) |
 
 All admin panels use Components v2 and reply **ephemeral**.
 
@@ -95,7 +95,7 @@ docker compose build && docker compose up -d
 ### Upgrading
 
 - Set `path = "fcdex_3_1"` and pin the latest tag (e.g. **`@2.2.2`**).
-- Run migrations through **`0010`** (shop bundle specials).
+- Run migrations through **`0011`** (configurable daily quests).
 - Django app **label stays `fcdex_3_0`** for database compatibility.
 - Enable economy: admin **Settings** → set **`currency_name`** (e.g. `coin`).
 

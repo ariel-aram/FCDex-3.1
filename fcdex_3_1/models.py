@@ -306,6 +306,35 @@ class SBCRecipe(models.Model):
         return self.name
 
 
+class QuestHook(models.TextChoices):
+    PACK_DAILY = "pack_daily", "Open daily pack"
+    BATTLE_PLAY = "battle_play", "Play a battle"
+    MERGE_ONCE = "merge_once", "Complete a merge"
+
+
+class QuestDefinition(models.Model):
+    quest_key = models.CharField(max_length=32, unique=True, help_text="Unique slug shown in /fcdex quests.")
+    label = models.CharField(max_length=128)
+    description = models.TextField(blank=True, default="")
+    target = models.PositiveIntegerField(default=1)
+    reward_coins = models.PositiveIntegerField(default=0)
+    hook_key = models.CharField(
+        max_length=32,
+        choices=QuestHook.choices,
+        help_text="Progress hook — must match game events (pack, battle, merge).",
+    )
+    enabled = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ("sort_order", "quest_key")
+        verbose_name = "Daily quest definition"
+        verbose_name_plural = "Daily quest definitions"
+
+    def __str__(self) -> str:
+        return self.label
+
+
 class PlayerQuestProgress(models.Model):
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="fcdex_quests")
     player_id: int

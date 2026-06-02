@@ -7,6 +7,7 @@ from .models import (
     PlayerAchievement,
     PlayerQuestProgress,
     PlayerStats,
+    QuestDefinition,
     SBCRecipe,
     ShopBundle,
     ShopBundleItem,
@@ -130,6 +131,14 @@ class SBCRecipeAdmin(admin.ModelAdmin):
     autocomplete_fields = ("required_ball", "reward_ball")
     list_display = ("name", "required_ball", "required_count", "reward_ball", "reward_money", "enabled")
     list_filter = ("enabled",)
+
+
+@admin.register(QuestDefinition)
+class QuestDefinitionAdmin(admin.ModelAdmin):
+    list_display = ("label", "quest_key", "hook_key", "target", "reward_coins", "enabled", "sort_order")
+    list_filter = ("enabled", "hook_key")
+    search_fields = ("quest_key", "label", "description")
+    ordering = ("sort_order", "quest_key")
 
 
 @admin.register(PlayerQuestProgress)
