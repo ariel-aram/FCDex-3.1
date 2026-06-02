@@ -20,6 +20,7 @@ from fcdex_3_1.fcdex_ext.leaderboard_logic import (
     format_viewer_footer,
     normalize_metric_for_scope,
     page_count,
+    resolve_leaderboard_display_name,
     slice_page,
 )
 from fcdex_3_1.fcdex_ext.views import truncate_text
@@ -31,14 +32,16 @@ log = logging.getLogger("fcdex_3_1.leaderboard.views")
 
 
 def profile_from_user(user: discord.User | discord.Member) -> LeaderboardProfile:
-    name = user.display_name or getattr(user, "global_name", None) or user.name
-    return LeaderboardProfile(display_name=name, avatar_url=str(user.display_avatar.url))
+    return LeaderboardProfile(
+        display_name=resolve_leaderboard_display_name(username=user.name),
+        avatar_url=str(user.display_avatar.url),
+    )
 
 
 async def resolve_leaderboard_profiles(
     client: discord.Client, discord_ids: list[int], *, guild: discord.Guild | None = None
 ) -> dict[int, LeaderboardProfile]:
-    """Resolve display names and avatars without mention strings."""
+    """Resolve Discord usernames and avatars without mention strings."""
     unique_ids = list(dict.fromkeys(discord_ids))
     profiles: dict[int, LeaderboardProfile] = {}
     to_fetch: list[int] = []

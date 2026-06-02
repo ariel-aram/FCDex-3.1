@@ -16,6 +16,11 @@ EXCLUDE_IDS: list[int] = []
 UNKNOWN_USER = "Unknown User"
 
 
+def resolve_leaderboard_display_name(*, username: str) -> str:
+    """Return the Discord username shown on leaderboard rows."""
+    return username
+
+
 class LeaderboardScope(StrEnum):
     SERVER = "server"
     GLOBAL = "global"

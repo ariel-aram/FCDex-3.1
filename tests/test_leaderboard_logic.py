@@ -23,10 +23,15 @@ from fcdex_3_1.fcdex_ext.leaderboard_logic import (  # noqa: E402
     normalize_metric_for_scope,
     page_count,
     resolve_default_scope,
+    resolve_leaderboard_display_name,
     resolve_scope,
     server_metric_allowed,
     slice_page,
 )
+
+
+def test_resolve_leaderboard_display_name_uses_username():
+    assert resolve_leaderboard_display_name(username="arielaram") == "arielaram"
 
 
 def test_default_scope_in_guild():
