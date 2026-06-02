@@ -15,6 +15,9 @@ sys.modules.setdefault("bd_models.models", _bd_models_models)
 
 from fcdex_3_1.fcdex_ext.broadcast_logic import (  # noqa: E402
     DISCORD_MESSAGE_MAX,
+    DMSendOutcome,
+    classify_dm_error,
+    format_announce_message,
     pick_guild_announce_channel,
     preview_broadcast_message,
     validate_broadcast_message,
@@ -76,6 +79,30 @@ def test_pick_guild_system_channel_when_no_raid():
     member = MagicMock()
     picked = pick_guild_announce_channel(guild, member, raid_channel_id=None)
     assert picked is system
+
+
+def test_format_announce_message_title_and_body():
+    text = format_announce_message(title="Update", body="New packs live.")
+    assert text.startswith("# Update")
+    assert "New packs live." in text
+
+
+def test_classify_dm_closed_forbidden():
+    exc = MagicMock(spec=discord.Forbidden)
+    exc.code = 50007
+    assert classify_dm_error(exc) == DMSendOutcome.DM_CLOSED
+
+
+def test_pick_guild_prefers_spawn_channel():
+    guild = MagicMock(spec=discord.Guild)
+    spawn = _channel(50, position=5)
+    system = _channel(2)
+    guild.get_channel.return_value = spawn
+    guild.system_channel = system
+    guild.text_channels = [system]
+    member = MagicMock()
+    picked = pick_guild_announce_channel(guild, member, preferred_channel_id=50)
+    assert picked is spawn
 
 
 def test_pick_guild_first_text_channel_fallback():

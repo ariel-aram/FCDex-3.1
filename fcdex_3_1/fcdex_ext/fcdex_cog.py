@@ -64,9 +64,9 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
                 "### 📋 List regime\n`/fcdex list regime:<name>` — browse clubballs by regime",
                 "### 🛒 Shop\n`/fcdex shop` — buy bundles with coins",
                 "### 👑 Boss · 📜 Quests\n`/fcdex boss` — guild raid · `/fcdex quests` · `/fcdex quest claim`",
-                "### 🛡️ Admin\n`/fcdex admin` — shop, craft, quests, achievements, merge, boss "
-                "& owners (Manage Server · ephemeral)\n"
-                "`/broadcast dm` · `/broadcast server` — mass announcements (confirm · rate-limited)",
+                "### 🛡️ Admin\n`/fcdex admin` — shop, craft, quests, achievements, merge, boss, "
+                "**Announce**, owners (Manage Server · ephemeral)\n"
+                "`/broadcast dm` · `/broadcast server` — same broadcasts via slash (confirm · rate-limited)",
             ],
             footer="-# Configure SBCs, achievements, quests & more in `/fcdex admin` · FCDex 3.1",
         )
@@ -118,7 +118,8 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
         await interaction.response.send_message(view=layout, ephemeral=True)  # pyright: ignore[reportArgumentType]
 
     @app_commands.command(
-        name="admin", description="FCDex admin hub — shop, craft, quests, achievements, merge, boss, owners"
+        name="admin",
+        description="FCDex admin hub — shop, craft, quests, achievements, merge, boss, announce, owners",
     )
     @_admin_access_check()
     async def admin(self, interaction: discord.Interaction):

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING, Literal
 
@@ -11,15 +10,11 @@ from discord.ui import Button, View, button
 
 from fcdex_3_1.fcdex_ext.broadcast_logic import (
     DISCORD_MESSAGE_MAX,
-    DM_PROGRESS_EVERY,
-    SERVER_GUILD_DELAY_SECONDS,
-    SERVER_PROGRESS_EVERY,
     count_dm_recipients,
-    iter_dm_recipient_ids,
-    pick_guild_announce_channel,
+    count_server_broadcast_targets,
     preview_broadcast_message,
-    raid_channel_id_for_guild,
-    sleep_dm_batch,
+    run_dm_broadcast,
+    run_server_broadcast,
     validate_broadcast_message,
 )
 
@@ -98,94 +93,16 @@ async def _edit_status(interaction: discord.Interaction, text: str) -> None:
 
 async def _run_dm_broadcast(interaction: discord.Interaction, bot: BallsDexBot, message: str) -> None:
     total = await count_dm_recipients()
-    sent = 0
-    dm_closed = 0
-    other_fail = 0
-    processed = 0
-
     await _edit_status(interaction, f"Starting DM broadcast to **{total:,}** players…")
-
-    async for discord_id in iter_dm_recipient_ids():
-        processed += 1
-        try:
-            user = await bot.fetch_user(discord_id)
-            await user.send(message)
-            sent += 1
-        except discord.Forbidden:
-            dm_closed += 1
-        except discord.HTTPException as exc:
-            other_fail += 1
-            log.warning("DM broadcast failed for %s: %s", discord_id, exc)
-        except Exception:
-            other_fail += 1
-            log.exception("DM broadcast failed for %s", discord_id)
-
-        if processed % DM_PROGRESS_EVERY == 0 or processed == total:
-            await _edit_status(
-                interaction,
-                f"DM broadcast… **{sent:,}** sent · **{processed:,}/{total:,}** processed",
-            )
-        await sleep_dm_batch(processed)
-
-    summary = (
-        f"**DM broadcast complete**\n"
-        f"- Sent: **{sent:,}**\n"
-        f"- DMs closed / blocked: **{dm_closed:,}**\n"
-        f"- Other failures: **{other_fail:,}**\n"
-        f"- Total targeted: **{total:,}**"
-    )
-    await _edit_status(interaction, summary)
+    tally, _ = await run_dm_broadcast(bot, message)
+    await _edit_status(interaction, tally.format_dm_summary(total=total))
 
 
 async def _run_server_broadcast(interaction: discord.Interaction, bot: BallsDexBot, message: str) -> None:
-    guilds = list(bot.guilds)
-    total = len(guilds)
-    posted = 0
-    skipped = 0
-    failed = 0
-
-    await _edit_status(interaction, f"Starting server broadcast across **{total:,}** servers…")
-
-    for index, guild in enumerate(guilds, start=1):
-        member = guild.me
-        if member is None:
-            skipped += 1
-            continue
-        channel = pick_guild_announce_channel(
-            guild, member, raid_channel_id=raid_channel_id_for_guild(guild.id)
-        )
-        if channel is None:
-            skipped += 1
-            continue
-        try:
-            await channel.send(message)
-            posted += 1
-        except discord.Forbidden:
-            skipped += 1
-            log.warning("Server broadcast: no permission in %s (#%s)", guild.id, channel.id)
-        except discord.HTTPException as exc:
-            failed += 1
-            log.warning("Server broadcast failed in %s: %s", guild.id, exc)
-        except Exception:
-            failed += 1
-            log.exception("Server broadcast failed in guild %s", guild.id)
-
-        if index % SERVER_PROGRESS_EVERY == 0 or index == total:
-            await _edit_status(
-                interaction,
-                f"Server broadcast… **{posted:,}** posted · **{index:,}/{total:,}** servers",
-            )
-        if index < total:
-            await asyncio.sleep(SERVER_GUILD_DELAY_SECONDS)
-
-    summary = (
-        f"**Server broadcast complete**\n"
-        f"- Posted: **{posted:,}**\n"
-        f"- Skipped (no channel / permission): **{skipped:,}**\n"
-        f"- Failed: **{failed:,}**\n"
-        f"- Guilds: **{total:,}**"
-    )
-    await _edit_status(interaction, summary)
+    total = await count_server_broadcast_targets(bot)
+    await _edit_status(interaction, f"Starting server broadcast across **{total:,}** postable servers…")
+    tally, guilds, skipped = await run_server_broadcast(bot, message)
+    await _edit_status(interaction, tally.format_server_summary(guilds=guilds, skipped=skipped))
 
 
 async def _prompt_broadcast(
@@ -209,8 +126,8 @@ async def _prompt_broadcast(
             "large sends may take several minutes."
         )
     else:
-        count = len(interaction.client.guilds)
-        recipient_label = f"**{count:,}** servers (one message per server)"
+        count = await count_server_broadcast_targets(interaction.client)
+        recipient_label = f"**{count:,}** servers with a writable channel (one message each)"
         title = "Server broadcast"
         warning = "This posts your message publicly in each target server channel."
 
