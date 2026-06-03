@@ -67,6 +67,16 @@ class _TournamentGroup:
         self.label = value.title()
 
 
+class _TournamentPrizeType:
+    COINS = "coins"
+    RANDOM_COMMON = "random_common"
+    BALL = "ball"
+
+
+class _FcdexDummyModel:
+    objects = SimpleNamespace()
+
+
 class _PackType(StrEnum):
     DAILY = "daily"
     WEEKLY = "weekly"
@@ -115,7 +125,9 @@ class _ModelsStub(ModuleType):
         self.TournamentGroup = _TournamentGroup
         self.TournamentRound = object
         self.TournamentMatchPrize = object
-        self.TournamentPrizeType = object
+        self.TournamentPrizeType = _TournamentPrizeType
+        self.TournamentParticipationReward = _FcdexDummyModel
+        self.TournamentParticipantRewardClaim = _FcdexDummyModel
         self.Achievement = object
         self.AchievementType = _AchievementType
         self.PlayerAchievement = object

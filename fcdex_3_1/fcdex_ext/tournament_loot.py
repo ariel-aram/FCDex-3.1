@@ -3,7 +3,14 @@ from __future__ import annotations
 import random
 
 from bd_models.models import Ball, BallInstance, Player
-from fcdex_3_1.models import TournamentMatch, TournamentMatchPrize, TournamentPrizeType
+from fcdex_3_1.models import (
+    TournamentMatch,
+    TournamentMatchPrize,
+    TournamentParticipationReward,
+    TournamentPrizeType,
+)
+
+PrizeEntry = TournamentMatchPrize | TournamentParticipationReward
 
 
 async def _pick_random_common_ball() -> Ball | None:
@@ -27,7 +34,7 @@ async def load_match_prizes(match: TournamentMatch) -> list[TournamentMatchPrize
     ]
 
 
-async def grant_prize_entry(player: Player, prize: TournamentMatchPrize, *, guild_id: int | None) -> str:
+async def grant_prize_entry(player: Player, prize: PrizeEntry, *, guild_id: int | None) -> str:
     if prize.prize_type == TournamentPrizeType.COINS:
         amount = prize.coins or 0
         if amount:

@@ -18,6 +18,8 @@ from .models import (
     TournamentBet,
     TournamentMatch,
     TournamentMatchPrize,
+    TournamentParticipantRewardClaim,
+    TournamentParticipationReward,
     TournamentRegistration,
 )
 
@@ -111,6 +113,23 @@ class TournamentMatchPrizeAdmin(admin.ModelAdmin):
     search_fields = ("label", "tournament__name", "match__id")
     list_display = ("tournament", "match", "round", "group", "prize_type", "coins", "label", "weight")
     list_filter = ("prize_type", "round", "group", "tournament")
+
+
+@admin.register(TournamentParticipationReward)
+class TournamentParticipationRewardAdmin(admin.ModelAdmin):
+    autocomplete_fields = ("tournament", "ball")
+    search_fields = ("label", "description", "tournament__name")
+    list_display = ("tournament", "label", "prize_type", "coins", "ball")
+    list_filter = ("prize_type", "tournament")
+
+
+@admin.register(TournamentParticipantRewardClaim)
+class TournamentParticipantRewardClaimAdmin(admin.ModelAdmin):
+    autocomplete_fields = ("tournament", "player", "reward")
+    search_fields = ("tournament__name", "player__discord_id", "reward__label")
+    list_display = ("tournament", "player", "reward", "granted_at")
+    list_filter = ("tournament",)
+    readonly_fields = ("granted_at",)
 
 
 @admin.register(TournamentBet)

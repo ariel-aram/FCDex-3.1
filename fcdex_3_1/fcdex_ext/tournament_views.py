@@ -70,6 +70,7 @@ class TournamentManageView(LayoutView):
             "▸ **Edit** — description, schedule, cutoff, status\n"
             "▸ **Host** — start group stage or advance rounds\n"
             "▸ **Bounty vault** — loot pools, rules, and betting\n"
+            "▸ **Rewards** — participation prizes for match participants\n"
             "▸ **Delete** — permanently remove a tournament\n"
             "▸ **Announce** — public signup post in this channel"
         )
@@ -165,6 +166,19 @@ class TournamentManageExtraRow(ActionRow):
         from fcdex_3_1.fcdex_ext.tournament_bounty_views import build_bounty_pick_view
 
         view = await build_bounty_pick_view(self.owner_id)
+        await interaction.response.edit_message(view=view)
+
+    @button(label="Rewards", style=discord.ButtonStyle.secondary, emoji="🎖️")
+    async def rewards_button(self, interaction: Interaction, button: Button):
+        if _owner_mismatch(interaction, self.owner_id):
+            await _deny_owner(interaction)
+            return
+        if not _require_manage_guild(interaction):
+            await _deny_manage_guild(interaction)
+            return
+        from fcdex_3_1.fcdex_ext.tournament_rewards_views import build_rewards_pick_view
+
+        view = await build_rewards_pick_view(self.owner_id)
         await interaction.response.edit_message(view=view)
 
 

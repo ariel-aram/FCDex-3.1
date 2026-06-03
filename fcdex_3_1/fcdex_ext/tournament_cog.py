@@ -56,7 +56,8 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
         self.bot = bot
 
     @app_commands.command(
-        name="manage", description="Admin panel — create, edit, host, bounty vault, delete, and announce tournaments"
+        name="manage",
+        description="Admin panel — create, edit, host, bounty vault, participation rewards, delete, and announce",
     )
     @app_commands.checks.has_permissions(manage_guild=True)
     async def manage(self, interaction: discord.Interaction):
@@ -107,6 +108,17 @@ class TournamentCog(commands.GroupCog, group_name="tournament"):
         show_start = await viewer_can_start_group_stage(interaction, tournament)
         layout = await build_tournament_match_menu(interaction.user.id, tournament.pk, show_host_start=show_start)
         await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]
+
+    @app_commands.command(
+        name="rewards",
+        description="Admin — participation prizes for players who completed at least one match (Manage Server)",
+    )
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def rewards(self, interaction: discord.Interaction):
+        from fcdex_3_1.fcdex_ext.tournament_rewards_views import build_rewards_pick_view
+
+        view = await build_rewards_pick_view(interaction.user.id)
+        await interaction.response.send_message(view=view, ephemeral=True)  # pyright: ignore[reportArgumentType]
 
     @app_commands.command(name="bet", description="Wager coins on who wins a tournament match")
     async def bet(

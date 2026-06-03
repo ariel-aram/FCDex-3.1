@@ -228,6 +228,45 @@ class TournamentMatchPrize(models.Model):
         return f"{self.tournament_id} · {target} · {self.prize_type}"
 
 
+class TournamentParticipationReward(models.Model):
+    tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name="participation_rewards")
+    tournament_id: int
+    label = models.CharField(max_length=64, blank=True, default="")
+    description = models.TextField(blank=True, default="")
+    prize_type = models.CharField(max_length=16, choices=TournamentPrizeType.choices)
+    coins = models.PositiveIntegerField(default=0)
+    ball = models.ForeignKey(Ball, on_delete=models.SET_NULL, null=True, blank=True)
+    ball_id: int | None
+
+    class Meta:
+        ordering = ("pk",)
+        verbose_name = "tournament participation reward"
+        verbose_name_plural = "tournament participation rewards"
+
+    def get_prize_type_display(self) -> str:
+        return TournamentPrizeType(self.prize_type).label
+
+    def __str__(self) -> str:
+        return f"Reward #{self.pk} · {self.label or self.get_prize_type_display()}"
+
+
+class TournamentParticipantRewardClaim(models.Model):
+    tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name="participant_claims")
+    tournament_id: int
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="participant_reward_claims")
+    player_id: int
+    reward = models.ForeignKey(TournamentParticipationReward, on_delete=models.CASCADE, related_name="claims")
+    reward_id: int
+    granted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("tournament", "player", "reward")
+        ordering = ("-granted_at",)
+
+    def __str__(self) -> str:
+        return f"Claim t{self.tournament_id} p{self.player_id} r{self.reward_id}"
+
+
 class TournamentBet(models.Model):
     tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name="bets")
     tournament_id: int

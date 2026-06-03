@@ -233,7 +233,13 @@ class MergeActionRow(ActionRow):
             return
 
         bot = cast("BallsDexBot", interaction.client)
-        await interaction.response.defer()
+        loading_layout = await build_merge_picker_view(
+            bot,
+            self.owner_id,
+            selected_ball_id=self.ball_id,
+            notice="⏳ Forging your next tier…",
+        )
+        await interaction.response.edit_message(view=loading_layout)
         player, _ = await Player.objects.aget_or_create(discord_id=self.owner_id)
         summaries = await _load_merge_summaries(player)
         summary = _find_summary(summaries, self.ball_id)
@@ -264,6 +270,16 @@ class MergeActionRow(ActionRow):
         except MergeValidationError as exc:
             layout = await build_merge_picker_view(
                 bot, self.owner_id, selected_ball_id=self.ball_id, notice=f"❌ {exc.message}"
+            )
+            await interaction.edit_original_response(view=layout)
+            return
+        except Exception:
+            log.exception("Merge forge failed for user %s ball %s", self.owner_id, self.ball_id)
+            layout = await build_merge_picker_view(
+                bot,
+                self.owner_id,
+                selected_ball_id=self.ball_id,
+                notice="❌ Forge failed unexpectedly. Try again, and check logs if it keeps happening.",
             )
             await interaction.edit_original_response(view=layout)
             return
