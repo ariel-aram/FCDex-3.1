@@ -18,22 +18,33 @@ if "discord" not in sys.modules:
 
 from django.utils import timezone
 
-from fcdex_3_1.fcdex_ext.pack_logic import PackType, collection_card_file, cooldown_remaining, format_pack_open_message
+from fcdex_3_1.fcdex_ext.pack_assets import pack_art_path
+from fcdex_3_1.fcdex_ext.pack_logic import (
+    PACK_REWARDS,
+    PackType,
+    collection_card_file,
+    cooldown_remaining,
+    format_pack_open_message,
+)
 
 
 def test_format_pack_open_message_single_ball():
     text = format_pack_open_message("Daily Pack", 293, ["Me Pica un Pulmon"])
-    assert text == "Opened **Daily Pack**! **+293** coins · Me Pica un Pulmon"
+    assert "**+293** coins" in text
+    assert "**1** clubball(s)" in text
+    assert "Me Pica un Pulmon" in text
 
 
 def test_format_pack_open_message_multiple_balls():
-    text = format_pack_open_message("Weekly Pack", 1500, ["Alpha", "Beta"])
-    assert text == "Opened **Weekly Pack**! **+1,500** coins · Alpha, Beta"
+    text = format_pack_open_message("Weekly Pack", 1500, ["Alpha", "Beta", "Gamma"])
+    assert "**+1,500** coins" in text
+    assert "**3** clubball(s)" in text
+    assert "**Alpha**" in text and "**Beta**" in text
 
 
 def test_format_pack_open_message_no_balls():
     text = format_pack_open_message("Daily Pack", 500, [])
-    assert "no clubball (dex cache empty)" in text
+    assert "no clubballs (dex cache empty)" in text
 
 
 def test_collection_card_file_missing():
@@ -52,6 +63,17 @@ def test_collection_card_file_returns_file(tmp_path):
 
 def test_cooldown_remaining_none_when_never_claimed():
     assert cooldown_remaining(None, PackType.DAILY) is None
+
+
+def test_pack_reward_counts_grant_multiple_collectibles():
+    assert PACK_REWARDS[PackType.DAILY]["balls"] >= 2
+    assert PACK_REWARDS[PackType.WEEKLY]["balls"] >= 2
+    assert PACK_REWARDS[PackType.MASCOT]["balls"] >= 2
+
+
+def test_pack_art_files_exist():
+    for pack_type in (PackType.DAILY, PackType.WEEKLY, PackType.MASCOT):
+        assert pack_art_path(pack_type).is_file()
 
 
 def test_cooldown_remaining_after_recent_claim():

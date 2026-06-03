@@ -7,15 +7,15 @@ from discord import app_commands
 from discord.ext import commands
 
 from bd_models.models import Player
-from fcdex_3_1.fcdex_ext.pack_logic import PackOpenSuccess, grant_pack, render_pack_card_file
-from fcdex_3_1.fcdex_ext.views import build_panel_layout
+from fcdex_3_1.fcdex_ext.pack_logic import PackOpenSuccess, grant_pack
+from fcdex_3_1.fcdex_ext.pack_views import build_pack_open_layout
 
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
 
 
 class PackCog(commands.GroupCog, group_name="pack"):
-    """Mascot, daily, and weekly reward packs."""
+    """Daily, weekly, and exclusive reward packs."""
 
     def __init__(self, bot: BallsDexBot):
         self.bot = bot
@@ -29,26 +29,24 @@ class PackCog(commands.GroupCog, group_name="pack"):
             return
 
         success: PackOpenSuccess = result  # type: ignore[assignment]
-        layout = build_panel_layout(title="FCDex 3.1 · Pack opened", sections=[success.message])
-        attachments: list[discord.File] = []
-        if success.instances and success.balls:
-            card = await render_pack_card_file(success.instances[0], success.balls[0], bot=self.bot, index=1)
-            if card:
-                attachments.append(card)
-
+        layout, attachments = build_pack_open_layout(pack_type=pack_type, body=success.message)
         send_kwargs: dict = {"view": layout}
         if attachments:
             send_kwargs["attachments"] = attachments
         await interaction.response.send_message(**send_kwargs)  # pyright: ignore[reportArgumentType]
 
-    @app_commands.command(name="daily", description="Open your daily pack (24h cooldown)")
+    @app_commands.command(name="daily", description="Open your daily pack — 3 clubballs (24h cooldown)")
     async def daily(self, interaction: discord.Interaction):
         await self._open(interaction, "daily")
 
-    @app_commands.command(name="weekly", description="Open your weekly pack (7d cooldown)")
+    @app_commands.command(name="weekly", description="Open your weekly pack — 5 clubballs (7d cooldown)")
     async def weekly(self, interaction: discord.Interaction):
         await self._open(interaction, "weekly")
 
-    @app_commands.command(name="mascot", description="Open your mascot pack (7d cooldown)")
+    @app_commands.command(name="mascot", description="Open your exclusive pack — 3 clubballs (7d cooldown)")
     async def mascot(self, interaction: discord.Interaction):
+        await self._open(interaction, "mascot")
+
+    @app_commands.command(name="exclusive", description="Open your exclusive pack — 3 clubballs (7d cooldown)")
+    async def exclusive(self, interaction: discord.Interaction):
         await self._open(interaction, "mascot")

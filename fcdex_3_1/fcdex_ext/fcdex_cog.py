@@ -53,7 +53,7 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
             title="FCDex 3.1",
             subtitle="Official extra · Components v2",
             sections=[
-                "### 📦 Packs\n`/pack daily` · `/pack weekly` · `/pack mascot`",
+                "### 📦 Packs\n`/pack daily` · `/pack weekly` · `/pack exclusive` (3 / 5 / 3 clubballs)",
                 "### 🧪 Craft (SBC)\n`/craft menu` · `/craft complete name:<SBC>`",
                 "### ⚔️ Battles\n"
                 "`/battle challenge` — lineup panel\n"

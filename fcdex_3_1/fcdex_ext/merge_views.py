@@ -233,13 +233,14 @@ class MergeActionRow(ActionRow):
             return
 
         bot = cast("BallsDexBot", interaction.client)
+        await interaction.response.defer()
         loading_layout = await build_merge_picker_view(
             bot,
             self.owner_id,
             selected_ball_id=self.ball_id,
             notice="⏳ Forging your next tier…",
         )
-        await interaction.response.edit_message(view=loading_layout)
+        await interaction.edit_original_response(view=loading_layout, attachments=[])
         player, _ = await Player.objects.aget_or_create(discord_id=self.owner_id)
         summaries = await _load_merge_summaries(player)
         summary = _find_summary(summaries, self.ball_id)
@@ -247,7 +248,7 @@ class MergeActionRow(ActionRow):
             layout = await build_merge_picker_view(
                 bot, self.owner_id, notice="❌ That clubball is no longer mergeable."
             )
-            await interaction.edit_original_response(view=layout)
+            await interaction.edit_original_response(view=layout, attachments=[])
             return
 
         target_level = _current_target_level(summary.counts)
@@ -258,20 +259,18 @@ class MergeActionRow(ActionRow):
                 selected_ball_id=self.ball_id,
                 notice="❌ You do not have enough copies for the next visible forge tier yet.",
             )
-            await interaction.edit_original_response(view=layout)
+            await interaction.edit_original_response(view=layout, attachments=[])
             return
 
         instances = _target_instances(summary, target_level)
         try:
             await validate_merge_batch(player, instances)
-            _, summary_text, card_file, _ = await execute_merge(
-                player, instances, guild_id=interaction.guild_id, bot=bot
-            )
+            _, summary_text, _, _ = await execute_merge(player, instances, guild_id=interaction.guild_id, bot=bot)
         except MergeValidationError as exc:
             layout = await build_merge_picker_view(
                 bot, self.owner_id, selected_ball_id=self.ball_id, notice=f"❌ {exc.message}"
             )
-            await interaction.edit_original_response(view=layout)
+            await interaction.edit_original_response(view=layout, attachments=[])
             return
         except Exception:
             log.exception("Merge forge failed for user %s ball %s", self.owner_id, self.ball_id)
@@ -281,11 +280,15 @@ class MergeActionRow(ActionRow):
                 selected_ball_id=self.ball_id,
                 notice="❌ Forge failed unexpectedly. Try again, and check logs if it keeps happening.",
             )
-            await interaction.edit_original_response(view=layout)
+            await interaction.edit_original_response(view=layout, attachments=[])
             return
 
         layout = await build_merge_picker_view(bot, self.owner_id, selected_ball_id=self.ball_id, notice=summary_text)
-        await interaction.edit_original_response(view=layout, attachments=[card_file])
+        try:
+            await interaction.edit_original_response(view=layout, attachments=[])
+        except discord.HTTPException:
+            log.exception("Merge panel refresh failed after forge for user %s", self.owner_id)
+            await interaction.followup.send(summary_text, ephemeral=True)
 
     @button(label="Refresh", style=discord.ButtonStyle.secondary, emoji="🔄")
     async def refresh_button(self, interaction: Interaction, button: Button):

@@ -25,9 +25,9 @@ PACK_COOLDOWNS = {
 }
 
 PACK_REWARDS = {
-    PackType.DAILY: {"coins_min": 250, "coins_max": 750, "balls": 1},
-    PackType.WEEKLY: {"coins_min": 1_000, "coins_max": 2_500, "balls": 2},
-    PackType.MASCOT: {"coins_min": 500, "coins_max": 1_500, "balls": 1},
+    PackType.DAILY: {"coins_min": 250, "coins_max": 750, "balls": 3},
+    PackType.WEEKLY: {"coins_min": 1_000, "coins_max": 2_500, "balls": 5},
+    PackType.MASCOT: {"coins_min": 500, "coins_max": 1_500, "balls": 3},
 }
 
 
@@ -59,8 +59,13 @@ def _spawnable_balls() -> list[Ball]:
 
 
 def format_pack_open_message(pack_label: str, coins: int, ball_names: list[str]) -> str:
-    ball_text = ", ".join(ball_names) if ball_names else "no clubball (dex cache empty)"
-    return f"Opened **{pack_label}**! **+{coins:,}** coins · {ball_text}"
+    if not ball_names:
+        ball_text = "no clubballs (dex cache empty)"
+    elif len(ball_names) == 1:
+        ball_text = ball_names[0]
+    else:
+        ball_text = ", ".join(f"**{name}**" for name in ball_names)
+    return f"**+{coins:,}** coins\n**{len(ball_names)}** clubball(s): {ball_text}"
 
 
 def collection_card_file(ball: Ball, *, index: int = 1) -> discord.File | None:
