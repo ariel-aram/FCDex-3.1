@@ -9,7 +9,6 @@ from django.db.models import Q
 
 from bd_models.models import Ball, BallInstance, Player, Special, balls
 from fcdex_3_1.fcdex_ext.bd_helpers import format_instance, get_ball, instance_attack, instance_health
-from fcdex_3_1.fcdex_ext.merge_debug import merge_debug
 from fcdex_3_1.fcdex_ext.merge_levels import (
     MAX_MERGE_LEVEL,
     format_merge_count_mismatch,
@@ -142,12 +141,6 @@ async def _resolve_unanimous_input_level(instances: list[BallInstance]) -> int:
 
 
 async def validate_merge_batch(player: Player, instances: list[BallInstance]) -> int:
-    merge_debug(
-        "H3",
-        "merge_logic.validate_merge_batch:entry",
-        "validating merge batch",
-        {"player_id": player.pk, "count": len(instances), "ids": [i.pk for i in instances[:12]]},
-    )
     if len(instances) < 2:
         raise MergeValidationError("Pick at least two clubballs to forge.")
 
@@ -190,12 +183,6 @@ async def validate_merge_batch(player: Player, instances: list[BallInstance]) ->
             ball = await get_ball(instance)
             if not await is_common_ball(ball):
                 country = getattr(ball, "country", "This clubball")
-                merge_debug(
-                    "H3",
-                    "merge_logic.validate_merge_batch:not_common",
-                    "ball failed common check for L1",
-                    {"country": country, "rarity": getattr(ball, "rarity", None)},
-                )
                 emoji = get_merge_level_emoji(target_level)
                 raise MergeValidationError(
                     f"**{country}** can't be used for **{emoji} Forge L{target_level}** — "
@@ -203,12 +190,6 @@ async def validate_merge_batch(player: Player, instances: list[BallInstance]) ->
                     "Pick a clubball that shows **Ready** in the dropdown."
                 )
 
-    merge_debug(
-        "H3",
-        "merge_logic.validate_merge_batch:ok",
-        "validation passed",
-        {"target_level": target_level, "input_level": input_level},
-    )
     return target_level
 
 

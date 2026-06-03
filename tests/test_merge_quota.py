@@ -18,8 +18,10 @@ def test_merge_quota_limit_reached():
 
 
 def test_format_progress_bar_full_and_empty():
-    assert "█" in format_progress_bar(5, 5)
-    assert "░" in format_progress_bar(0, 5)
+    assert format_progress_bar(5, 5) == f"`{'█' * 12}`"
+    assert format_progress_bar(0, 5) == f"`{'·' * 12}`"
+    assert "█" in format_progress_bar(1, 5)
+    assert "·" in format_progress_bar(1, 5)
 
 
 def test_merge_quota_limit_message_weekly():
@@ -39,5 +41,5 @@ def test_format_quota_status_block_includes_bar():
     )
     block = format_quota_status_block(snapshot, settings_period_days=7)
     assert "2" in block and "5" in block
-    assert "█" in block or "░" in block
+    assert "█" in block or "·" in block
     assert "premium" in block.lower()

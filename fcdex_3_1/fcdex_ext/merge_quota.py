@@ -83,7 +83,8 @@ def format_progress_bar(used: int, cap: int, *, width: int = 12) -> str:
     ratio = min(used / cap, 1.0)
     filled = min(width, round(ratio * width))
     empty = width - filled
-    return f"`{'█' * filled}{'░' * empty}`"
+    # Use the same block height for both segments — LIGHT SHADE (░) sits higher than FULL BLOCK (█) in Discord.
+    return f"`{'█' * filled}{'·' * empty}`"
 
 
 def format_reset_line(*, period_days: int, period_end: datetime) -> str:
