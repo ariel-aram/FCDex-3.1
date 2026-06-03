@@ -6,6 +6,7 @@ from fcdex_3_1.fcdex_ext.achievement_admin_util import (
     _TYPE_VALUES,
     _select_emoji,
     normalize_achievement_type,
+    parse_achievement_extras,
     parse_bool_field,
 )
 
@@ -31,6 +32,22 @@ def test_select_emoji_rejects_plain_text() -> None:
     assert _select_emoji("Boss") is None
     assert _select_emoji("  ") is None
     assert _select_emoji(None) is None
+
+
+def test_parse_achievement_extras_combined() -> None:
+    extras, err = parse_achievement_extras("coins=1000, ball=42, emoji=🏆, hidden=yes, enabled=no")
+    assert err is None
+    assert extras is not None
+    assert extras.reward_money == 1000
+    assert extras.reward_ball_raw == "42"
+    assert extras.hidden is True
+    assert extras.enabled is False
+
+
+def test_parse_achievement_extras_rejects_bad_coins() -> None:
+    extras, err = parse_achievement_extras("coins=-1")
+    assert extras is None
+    assert err is not None
 
 
 def test_select_emoji_accepts_unicode_and_custom() -> None:

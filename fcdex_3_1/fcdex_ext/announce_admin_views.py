@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING, Literal
 
@@ -17,7 +16,6 @@ from fcdex_3_1.fcdex_ext.broadcast_logic import (
     run_server_broadcast,
     validate_broadcast_message,
 )
-from fcdex_3_1.fcdex_ext.interaction_context import admin_context
 from fcdex_3_1.fcdex_ext.views import AdminHubBackRow, truncate_text
 
 if TYPE_CHECKING:
@@ -53,10 +51,7 @@ async def _deny_manage_guild(interaction: Interaction) -> None:
 class AnnounceContentModal(Modal):
     title_field = TextInput(label="Title", max_length=256, placeholder="FCDex update")
     body_field = TextInput(
-        label="Message",
-        style=discord.TextStyle.paragraph,
-        max_length=3500,
-        placeholder="What players should know…",
+        label="Message", style=discord.TextStyle.paragraph, max_length=3500, placeholder="What players should know…"
     )
 
     def __init__(self, owner_id: int, kind: BroadcastKind):
@@ -88,10 +83,7 @@ class AnnounceContentModal(Modal):
         else:
             recipient_count = await count_server_broadcast_targets(bot)  # type: ignore[arg-type]
         layout = build_broadcast_confirm_layout(
-            self.owner_id,
-            kind=self.kind,
-            content=content,
-            recipient_count=recipient_count,
+            self.owner_id, kind=self.kind, content=content, recipient_count=recipient_count
         )
         await interaction.response.edit_message(view=layout)
 
@@ -119,10 +111,7 @@ class BroadcastConfirmControls(ActionRow):
         await interaction.edit_original_response(
             view=build_broadcast_progress_layout(self.owner_id, self.kind, notice="Starting broadcast…")
         )
-        asyncio.create_task(
-            _execute_broadcast(interaction, self.owner_id, kind=self.kind, content=self.content),
-            name=f"fcdex-announce-{self.kind}",
-        )
+        await _execute_broadcast(interaction, self.owner_id, kind=self.kind, content=self.content)
 
     @button(label="Cancel", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction: Interaction, button: Button):
@@ -134,11 +123,7 @@ class BroadcastConfirmControls(ActionRow):
 
 
 def build_broadcast_confirm_layout(
-    owner_id: int,
-    *,
-    kind: BroadcastKind,
-    content: str,
-    recipient_count: int,
+    owner_id: int, *, kind: BroadcastKind, content: str, recipient_count: int
 ) -> LayoutView:
     layout = LayoutView(timeout=600)
     container = Container()
@@ -151,10 +136,7 @@ def build_broadcast_confirm_layout(
         f"### Preview\n{preview}"
     )
     if kind == "dm":
-        body += (
-            "\n\n-# Sends one DM per player with at least one clubball. "
-            "Throttled ~1s between messages."
-        )
+        body += "\n\n-# Sends one DM per player with at least one clubball. Throttled ~1s between messages."
     else:
         body += (
             "\n\n-# Posts to each server's spawn channel (if set), else announcement / system / first writable channel."
@@ -180,9 +162,15 @@ def build_broadcast_progress_layout(owner_id: int, kind: BroadcastKind, *, notic
 async def _update_announce_panel(interaction: Interaction, owner_id: int, *, notice: str) -> None:
     layout = build_announce_admin_layout(owner_id, notice=notice)
     try:
-        await interaction.edit_original_response(view=layout)
+        if interaction.response.is_done():
+            await interaction.edit_original_response(view=layout)
+        else:
+            await interaction.response.edit_message(view=layout)
     except discord.NotFound:
-        await interaction.followup.send(notice, ephemeral=True)
+        try:
+            await interaction.followup.send(notice, ephemeral=True)
+        except discord.HTTPException:
+            log.warning("Broadcast finished but panel message was gone for user %s", owner_id)
     except discord.HTTPException:
         log.exception("Could not refresh announce panel for user %s", owner_id)
 
@@ -200,9 +188,7 @@ async def _execute_broadcast(interaction: Interaction, owner_id: int, *, kind: B
         await _update_announce_panel(interaction, owner_id, notice=notice)
     except Exception:
         log.exception("Broadcast failed kind=%s", kind)
-        await _update_announce_panel(
-            interaction, owner_id, notice="❌ Broadcast failed — check bot logs."
-        )
+        await _update_announce_panel(interaction, owner_id, notice="❌ Broadcast failed — check bot logs.")
 
 
 class AnnounceAdminControls(ActionRow):
@@ -231,7 +217,8 @@ class AnnounceAdminControls(ActionRow):
             return
         count = await count_dm_recipients()
         layout = build_announce_admin_layout(
-            self.owner_id, notice=f"**DM dry-run:** **{count:,}** players with at least one clubball would receive a DM."
+            self.owner_id,
+            notice=f"**DM dry-run:** **{count:,}** players with at least one clubball would receive a DM.",
         )
         await interaction.response.edit_message(view=layout)
 
@@ -242,8 +229,7 @@ class AnnounceAdminControls(ActionRow):
             return
         count = await count_server_broadcast_targets(interaction.client)  # type: ignore[arg-type]
         layout = build_announce_admin_layout(
-            self.owner_id,
-            notice=f"**Server dry-run:** **{count:,}** servers have a writable announcement channel.",
+            self.owner_id, notice=f"**Server dry-run:** **{count:,}** servers have a writable announcement channel."
         )
         await interaction.response.edit_message(view=layout)
 
@@ -275,7 +261,6 @@ class AdminHubAnnounceRow(ActionRow):
 
     @button(label="Announce", style=discord.ButtonStyle.success, emoji="📣")
     async def announce(self, interaction: Interaction, button: Button):
-        ctx = admin_context(interaction)
         if not _require_manage_guild(interaction):
             await _deny_manage_guild(interaction)
             return

@@ -11,8 +11,9 @@ from fcdex_3_1.fcdex_ext.achievement_admin_util import (
     _TYPE_LABELS,
     _TYPE_VALUES,
     _select_emoji,
+    format_achievement_extras,
     normalize_achievement_type,
-    parse_bool_field,
+    parse_achievement_extras,
 )
 from fcdex_3_1.fcdex_ext.bd_resolve import resolve_ball_input
 from fcdex_3_1.fcdex_ext.interaction_context import AdminContext, admin_context
@@ -25,7 +26,17 @@ if TYPE_CHECKING:
 log = logging.getLogger("fcdex_3_1.achievement.admin")
 
 _normalize_type = normalize_achievement_type
-_parse_bool = parse_bool_field
+
+_EXTRAS_PLACEHOLDER = "coins=0\nemoji=🏆\nhidden=no\nenabled=yes\nball= (optional PK or country)"
+
+
+async def _resolve_reward_ball_id(raw: str) -> int | None | str:
+    if not raw.strip():
+        return None
+    ball = await resolve_ball_input(raw)
+    if ball is None:
+        return "Reward clubball not found in the dex."
+    return ball.pk
 
 
 class CreateAchievementModal(Modal, title="New achievement"):
@@ -38,12 +49,14 @@ class CreateAchievementModal(Modal, title="New achievement"):
         default="battles_won",
     )
     required_count = TextInput(label="Required count", placeholder="1", max_length=8, default="1")
-    reward_money = TextInput(label="Coin reward", placeholder="0", max_length=16, default="0")
-    emoji = TextInput(label="Emoji", required=False, max_length=32, default="🏆")
-    reward_ball = TextInput(
-        label="Reward clubball (optional)", required=False, placeholder="PK or country name", max_length=128
+    extras = TextInput(
+        label="Rewards & flags",
+        style=discord.TextStyle.paragraph,
+        required=False,
+        max_length=400,
+        placeholder="coins=500\nemoji=🏆\nhidden=no\nenabled=yes",
+        default="coins=0\nemoji=🏆\nhidden=no\nenabled=yes",
     )
-    hidden = TextInput(label="Hidden? (yes/no)", required=False, max_length=8, default="no")
 
     def __init__(self, owner_id: int):
         super().__init__()
@@ -61,13 +74,14 @@ class CreateAchievementModal(Modal, title="New achievement"):
             return
         try:
             required = int(self.required_count.value.strip())
-            reward = int(self.reward_money.value.strip().replace(",", ""))
-            if required < 1 or reward < 0:
+            if required < 1:
                 raise ValueError
         except ValueError:
-            await interaction.response.send_message(
-                "Required count must be ≥ 1 and reward must be ≥ 0.", ephemeral=True
-            )
+            await interaction.response.send_message("Required count must be ≥ 1.", ephemeral=True)
+            return
+        extras, extras_error = parse_achievement_extras(self.extras.value)
+        if extras_error or extras is None:
+            await interaction.response.send_message(extras_error or "Invalid extras.", ephemeral=True)
             return
         name = self.name.value.strip()
         if not name:
@@ -76,23 +90,20 @@ class CreateAchievementModal(Modal, title="New achievement"):
         if await Achievement.objects.filter(name__iexact=name).aexists():
             await interaction.response.send_message(f"Achievement **{name}** already exists.", ephemeral=True)
             return
-        reward_ball_id: int | None = None
-        raw_ball = (self.reward_ball.value or "").strip()
-        if raw_ball:
-            ball = await resolve_ball_input(raw_ball)
-            if ball is None:
-                await interaction.response.send_message("Reward clubball not found in the dex.", ephemeral=True)
-                return
-            reward_ball_id = ball.pk
+        reward_ball_id = await _resolve_reward_ball_id(extras.reward_ball_raw)
+        if isinstance(reward_ball_id, str):
+            await interaction.response.send_message(reward_ball_id, ephemeral=True)
+            return
         achievement = await Achievement.objects.acreate(
             name=name,
             description=self.description.value.strip(),
-            emoji=(self.emoji.value or "🏆")[:32],
+            emoji=extras.emoji,
             achievement_type=ach_type,
             required_count=required,
-            reward_money=reward,
+            reward_money=extras.reward_money,
             reward_ball_id=reward_ball_id,
-            hidden=_parse_bool(self.hidden.value),
+            hidden=extras.hidden,
+            enabled=extras.enabled,
         )
         ctx = admin_context(interaction)
         layout = await build_achievement_admin_layout(
@@ -106,13 +117,13 @@ class EditAchievementModal(Modal, title="Edit achievement"):
     description = TextInput(label="Description", style=discord.TextStyle.paragraph, max_length=500)
     achievement_type = TextInput(label="Type", max_length=32)
     required_count = TextInput(label="Required count", max_length=8)
-    reward_money = TextInput(label="Coin reward", max_length=16)
-    emoji = TextInput(label="Emoji", max_length=32)
-    reward_ball = TextInput(
-        label="Reward clubball", required=False, placeholder="PK, country, or leave empty to clear", max_length=128
+    extras = TextInput(
+        label="Rewards & flags",
+        style=discord.TextStyle.paragraph,
+        required=False,
+        max_length=400,
+        placeholder=_EXTRAS_PLACEHOLDER,
     )
-    hidden = TextInput(label="Hidden? (yes/no)", required=False, max_length=8)
-    enabled = TextInput(label="Enabled? (yes/no)", required=False, max_length=8)
 
     def __init__(self, owner_id: int, achievement: Achievement):
         super().__init__()
@@ -122,12 +133,13 @@ class EditAchievementModal(Modal, title="Edit achievement"):
         self.description.default = achievement.description
         self.achievement_type.default = achievement.achievement_type
         self.required_count.default = str(achievement.required_count)
-        self.reward_money.default = str(achievement.reward_money)
-        self.emoji.default = achievement.emoji
-        self.hidden.default = "yes" if achievement.hidden else "no"
-        self.enabled.default = "yes" if achievement.enabled else "no"
-        if achievement.reward_ball_id:
-            self.reward_ball.default = str(achievement.reward_ball_id)
+        self.extras.default = format_achievement_extras(
+            reward_money=achievement.reward_money,
+            emoji=achievement.emoji,
+            reward_ball_id=achievement.reward_ball_id,
+            hidden=achievement.hidden,
+            enabled=achievement.enabled,
+        )
 
     async def on_submit(self, interaction: Interaction) -> None:
         if interaction.user.id != self.owner_id:
@@ -141,39 +153,42 @@ class EditAchievementModal(Modal, title="Edit achievement"):
             return
         try:
             required = int(self.required_count.value.strip())
-            reward = int(self.reward_money.value.strip().replace(",", ""))
-            if required < 1 or reward < 0:
+            if required < 1:
                 raise ValueError
         except ValueError:
-            await interaction.response.send_message(
-                "Required count must be ≥ 1 and reward must be ≥ 0.", ephemeral=True
-            )
+            await interaction.response.send_message("Required count must be ≥ 1.", ephemeral=True)
+            return
+        achievement = await Achievement.objects.aget(pk=self.achievement_id)
+        extras, extras_error = parse_achievement_extras(
+            self.extras.value,
+            default_hidden=achievement.hidden,
+            default_enabled=achievement.enabled,
+            default_emoji=achievement.emoji,
+            default_coins=achievement.reward_money,
+        )
+        if extras_error or extras is None:
+            await interaction.response.send_message(extras_error or "Invalid extras.", ephemeral=True)
             return
         name = self.name.value.strip()
         if not name:
             await interaction.response.send_message("Name is required.", ephemeral=True)
             return
-        achievement = await Achievement.objects.aget(pk=self.achievement_id)
         if name.lower() != achievement.name.lower() and await Achievement.objects.filter(name__iexact=name).aexists():
             await interaction.response.send_message(f"Achievement **{name}** already exists.", ephemeral=True)
             return
-        raw_ball = (self.reward_ball.value or "").strip()
-        reward_ball_id: int | None = None
-        if raw_ball:
-            ball = await resolve_ball_input(raw_ball)
-            if ball is None:
-                await interaction.response.send_message("Reward clubball not found in the dex.", ephemeral=True)
-                return
-            reward_ball_id = ball.pk
+        reward_ball_id = await _resolve_reward_ball_id(extras.reward_ball_raw)
+        if isinstance(reward_ball_id, str):
+            await interaction.response.send_message(reward_ball_id, ephemeral=True)
+            return
         achievement.name = name
         achievement.description = self.description.value.strip()
-        achievement.emoji = (self.emoji.value or "🏆")[:32]
+        achievement.emoji = extras.emoji
         achievement.achievement_type = ach_type
         achievement.required_count = required
-        achievement.reward_money = reward
+        achievement.reward_money = extras.reward_money
         achievement.reward_ball_id = reward_ball_id
-        achievement.hidden = _parse_bool(self.hidden.value, default=achievement.hidden)
-        achievement.enabled = _parse_bool(self.enabled.value, default=achievement.enabled)
+        achievement.hidden = extras.hidden
+        achievement.enabled = extras.enabled
         await achievement.asave()
         ctx = admin_context(interaction)
         layout = await build_achievement_admin_layout(self.owner_id, ctx, notice=f"Updated **{achievement.name}**.")
@@ -344,7 +359,8 @@ async def build_achievement_admin_layout(
             truncate_text(
                 "# 🏅 Achievement admin\n"
                 "-# Goals for `/achievement menu` — catalog, progress & claims.\n"
-                "-# **Type** drives auto-progress (except **custom** — set progress in Django admin)."
+                "-# **Type** drives auto-progress (except **custom** — set progress in Django admin).\n"
+                "-# **Rewards & flags** (edit/create): `coins=`, `ball=`, `emoji=`, `hidden=`, `enabled=`."
             )
         )
     )
