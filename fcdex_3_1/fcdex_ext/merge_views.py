@@ -21,6 +21,7 @@ from fcdex_3_1.fcdex_ext.merge_debug import merge_debug
 from fcdex_3_1.fcdex_ext.merge_logic import (
     MergeValidationError,
     execute_merge,
+    forge_bucket_level_for_instance,
     instance_already_used_in_merge,
     preview_merge_stats,
     validate_merge_batch,
@@ -142,23 +143,7 @@ def _find_summary(summaries: list[MergeClubballSummary], ball_id: int | None) ->
     return next((summary for summary in summaries if summary.ball.pk == ball_id), None)
 
 
-async def _instance_level_for_summary(instance: BallInstance, merge_special_id: int) -> int | None:
-    if instance.special_id != merge_special_id:
-        return 0
-    cfg = next(
-        (
-            level
-            for level in range(1, MAX_MERGE_LEVEL + 1)
-            if instance.attack_bonus == get_merge_level_config(level).attack_bonus
-            and instance.health_bonus == get_merge_level_config(level).health_bonus
-        ),
-        None,
-    )
-    return cfg
-
-
 async def _load_merge_summaries(player: Player) -> list[MergeClubballSummary]:
-    merge_special = await get_merge_special()
     grouped: dict[int, dict[int, list[BallInstance]]] = {}
 
     async for instance in (
@@ -168,7 +153,7 @@ async def _load_merge_summaries(player: Player) -> list[MergeClubballSummary]:
             continue
         if await instance_already_used_in_merge(instance.pk):
             continue
-        level = await _instance_level_for_summary(instance, merge_special.pk)
+        level = await forge_bucket_level_for_instance(instance)
         if level is None:
             continue
         grouped.setdefault(instance.ball_id, _empty_buckets())[level].append(instance)

@@ -365,6 +365,25 @@ def test_validate_merge_batch_level_two_requires_nine_level_one_forge_cards():
     assert asyncio.run(merge_logic.validate_merge_batch(player, instances)) == 2
 
 
+def test_forge_bucket_level_excludes_non_common_from_l0():
+    merge_logic, _ = _load_merge_logic_for_validation_tests()
+    merge_logic.get_merge_special = AsyncMock(return_value=SimpleNamespace(pk=42, name="FCDex Merge"))
+    merge_logic.get_ball = AsyncMock(return_value=SimpleNamespace(pk=1, rarity=99, attack=100, health=80))
+    instance = _make_instance(pk=1, player_id=1, ball_id=1, special_id=None)
+
+    assert asyncio.run(merge_logic.forge_bucket_level_for_instance(instance)) is None
+
+
+def test_forge_bucket_level_includes_common_without_special():
+    merge_logic, _ = _load_merge_logic_for_validation_tests()
+    merge_logic.get_merge_special = AsyncMock(return_value=SimpleNamespace(pk=42, name="FCDex Merge"))
+    merge_logic.get_ball = AsyncMock(return_value=SimpleNamespace(pk=1, rarity=10, attack=100, health=80))
+    merge_logic.is_common_ball = AsyncMock(return_value=True)
+    instance = _make_instance(pk=1, player_id=1, ball_id=1, special_id=None)
+
+    assert asyncio.run(merge_logic.forge_bucket_level_for_instance(instance)) == 0
+
+
 def test_validate_merge_batch_level_one_rejects_special_common():
     merge_logic, _ = _load_merge_logic_for_validation_tests()
     player = SimpleNamespace(pk=1)

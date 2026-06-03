@@ -13,7 +13,6 @@ from fcdex_3_1.fcdex_ext.merge_debug import merge_debug
 from fcdex_3_1.fcdex_ext.merge_levels import (
     MAX_MERGE_LEVEL,
     format_merge_count_mismatch,
-    format_merge_input_requirement,
     get_merge_level_config,
     get_merge_level_emoji,
     level_requires_ball_country,
@@ -67,6 +66,26 @@ async def is_common_ball(ball: Ball) -> bool:
         return False
     min_rarity = min(entry.rarity for entry in enabled)
     return ball.rarity == min_rarity
+
+
+async def is_valid_l1_forge_input(instance: BallInstance) -> bool:
+    """True when this instance can be consumed for a Forge L1 merge."""
+    if instance.special_id is not None:
+        return False
+    ball = await get_ball(instance)
+    return await is_common_ball(ball)
+
+
+async def forge_bucket_level_for_instance(instance: BallInstance) -> int | None:
+    """UI bucket level for forge inventory, or None when the card cannot be used in any forge tier."""
+    if await instance_has_merge_special(instance):
+        level = await get_instance_merge_level(instance)
+        if level is None or level <= 0:
+            return None
+        return level
+    if await is_valid_l1_forge_input(instance):
+        return 0
+    return None
 
 
 async def instance_already_used_in_merge(instance_id: int) -> bool:
@@ -170,7 +189,19 @@ async def validate_merge_batch(player: Player, instances: list[BallInstance]) ->
                 raise MergeValidationError("Forge L1 only accepts plain common clubballs without any special.")
             ball = await get_ball(instance)
             if not await is_common_ball(ball):
-                raise MergeValidationError(format_merge_input_requirement(0, target_level))
+                country = getattr(ball, "country", "This clubball")
+                merge_debug(
+                    "H3",
+                    "merge_logic.validate_merge_batch:not_common",
+                    "ball failed common check for L1",
+                    {"country": country, "rarity": getattr(ball, "rarity", None)},
+                )
+                emoji = get_merge_level_emoji(target_level)
+                raise MergeValidationError(
+                    f"**{country}** can't be used for **{emoji} Forge L{target_level}** — "
+                    "only lowest-rarity **common** clubballs (no special) count. "
+                    "Pick a clubball that shows **Ready** in the dropdown."
+                )
 
     merge_debug(
         "H3",
