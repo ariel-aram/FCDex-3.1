@@ -29,11 +29,11 @@ class PackCog(commands.GroupCog, group_name="pack"):
             return
 
         success: PackOpenSuccess = result  # type: ignore[assignment]
-        layout, attachments = build_pack_open_layout(pack_type=pack_type, body=success.message)
-        send_kwargs: dict = {"view": layout}
-        if attachments:
-            send_kwargs["attachments"] = attachments
-        await interaction.response.send_message(**send_kwargs)  # pyright: ignore[reportArgumentType]
+        layout, pack_files = build_pack_open_layout(pack_type=pack_type, body=success.message)
+        if pack_files:
+            await interaction.response.send_message(view=layout, files=pack_files)  # pyright: ignore[reportArgumentType]
+        else:
+            await interaction.response.send_message(view=layout)  # pyright: ignore[reportArgumentType]
 
     @app_commands.command(name="daily", description="Open your daily pack — 3 clubballs (24h cooldown)")
     async def daily(self, interaction: discord.Interaction):

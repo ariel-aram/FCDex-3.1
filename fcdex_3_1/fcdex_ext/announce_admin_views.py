@@ -115,7 +115,8 @@ class BroadcastConfirmControls(ActionRow):
         if self.recipient_count <= 0:
             await interaction.response.send_message("Nothing to send — recipient count is zero.", ephemeral=True)
             return
-        await interaction.response.edit_message(
+        await interaction.response.defer(ephemeral=True)
+        await interaction.edit_original_response(
             view=build_broadcast_progress_layout(self.owner_id, self.kind, notice="Starting broadcast…")
         )
         asyncio.create_task(
@@ -176,10 +177,17 @@ def build_broadcast_progress_layout(owner_id: int, kind: BroadcastKind, *, notic
     return layout
 
 
+async def _update_announce_panel(interaction: Interaction, owner_id: int, *, notice: str) -> None:
+    layout = build_announce_admin_layout(owner_id, notice=notice)
+    try:
+        await interaction.edit_original_response(view=layout)
+    except discord.NotFound:
+        await interaction.followup.send(notice, ephemeral=True)
+    except discord.HTTPException:
+        log.exception("Could not refresh announce panel for user %s", owner_id)
+
+
 async def _execute_broadcast(interaction: Interaction, owner_id: int, *, kind: BroadcastKind, content: str) -> None:
-    message = interaction.message
-    if message is None:
-        return
     bot = interaction.client
     try:
         if kind == "dm":
@@ -189,15 +197,12 @@ async def _execute_broadcast(interaction: Interaction, owner_id: int, *, kind: B
             tally, guilds, skipped = await run_server_broadcast(bot, content)  # type: ignore[arg-type]
             summary = tally.format_server_summary(guilds=guilds, skipped=skipped)
         notice = f"{summary}\n\n-# You can start another broadcast from **Announce**."
-        layout = build_announce_admin_layout(owner_id, notice=notice)
-        await message.edit(view=layout)
+        await _update_announce_panel(interaction, owner_id, notice=notice)
     except Exception:
         log.exception("Broadcast failed kind=%s", kind)
-        layout = build_announce_admin_layout(owner_id, notice="Broadcast failed — check bot logs.")
-        try:
-            await message.edit(view=layout)
-        except discord.HTTPException:
-            pass
+        await _update_announce_panel(
+            interaction, owner_id, notice="❌ Broadcast failed — check bot logs."
+        )
 
 
 class AnnounceAdminControls(ActionRow):
