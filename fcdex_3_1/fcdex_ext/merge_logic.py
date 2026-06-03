@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
@@ -8,6 +9,7 @@ from django.db.models import Q
 
 from bd_models.models import Ball, BallInstance, Player, Special, balls
 from fcdex_3_1.fcdex_ext.bd_helpers import format_instance, get_ball, instance_attack, instance_health
+from fcdex_3_1.fcdex_ext.merge_debug import merge_debug
 from fcdex_3_1.fcdex_ext.merge_levels import (
     MAX_MERGE_LEVEL,
     format_merge_count_mismatch,
@@ -30,6 +32,8 @@ from settings.models import settings
 
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
+
+log = logging.getLogger("fcdex_3_1.merge.logic")
 
 
 class MergeValidationError(Exception):
@@ -119,6 +123,12 @@ async def _resolve_unanimous_input_level(instances: list[BallInstance]) -> int:
 
 
 async def validate_merge_batch(player: Player, instances: list[BallInstance]) -> int:
+    merge_debug(
+        "H3",
+        "merge_logic.validate_merge_batch:entry",
+        "validating merge batch",
+        {"player_id": player.pk, "count": len(instances), "ids": [i.pk for i in instances[:12]]},
+    )
     if len(instances) < 2:
         raise MergeValidationError("Pick at least two clubballs to forge.")
 
@@ -162,6 +172,12 @@ async def validate_merge_batch(player: Player, instances: list[BallInstance]) ->
             if not await is_common_ball(ball):
                 raise MergeValidationError(format_merge_input_requirement(0, target_level))
 
+    merge_debug(
+        "H3",
+        "merge_logic.validate_merge_batch:ok",
+        "validation passed",
+        {"target_level": target_level, "input_level": input_level},
+    )
     return target_level
 
 
@@ -182,7 +198,7 @@ def preview_merge_stats(ball: Ball, target_level: int) -> tuple[int, int, int, i
 
 async def execute_merge(
     player: Player, instances: list[BallInstance], *, guild_id: int | None, bot: BallsDexBot
-) -> tuple[BallInstance, str, discord.File, int]:
+) -> tuple[BallInstance, str, discord.File | None, int]:
     target_level = await validate_merge_batch(player, instances)
     cfg = get_merge_level_config(target_level)
     merge_special = await get_merge_special()
@@ -215,8 +231,13 @@ async def execute_merge(
 
     await bump_quest(player, "merge_once")
 
-    with ThreadPoolExecutor() as pool:
-        buffer = await bot.loop.run_in_executor(pool, new_instance.draw_card)
+    card_file: discord.File | None = None
+    try:
+        with ThreadPoolExecutor() as pool:
+            buffer = await bot.loop.run_in_executor(pool, new_instance.draw_card)
+        card_file = discord.File(buffer, "card.webp")
+    except Exception:
+        log.exception("Merge card render failed for instance %s", new_instance.pk)
 
     result_label = await format_instance(new_instance)
     _, _, final_attack, final_health = preview_merge_stats(result_ball, target_level)
@@ -226,4 +247,4 @@ async def execute_merge(
         f"You forged `{result_label}` — **`+{cfg.attack_bonus}%` ATK / `+{cfg.health_bonus}%` HP** "
         f"(≈ **{final_attack}** ATK · **{final_health}** HP)."
     )
-    return new_instance, summary, discord.File(buffer, "card.webp"), target_level
+    return new_instance, summary, card_file, target_level

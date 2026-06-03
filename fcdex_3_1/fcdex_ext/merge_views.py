@@ -17,6 +17,7 @@ from fcdex_3_1.fcdex_ext.merge_levels import (
     get_merge_level_config,
     get_merge_level_emoji,
 )
+from fcdex_3_1.fcdex_ext.merge_debug import merge_debug
 from fcdex_3_1.fcdex_ext.merge_logic import (
     MergeValidationError,
     execute_merge,
@@ -184,6 +185,100 @@ async def _load_merge_summaries(player: Player) -> list[MergeClubballSummary]:
     return summaries
 
 
+async def _fresh_instances(instance_ids: list[int]) -> list[BallInstance]:
+    if not instance_ids:
+        return []
+    rows = {
+        instance.pk: instance
+        async for instance in BallInstance.objects.filter(pk__in=instance_ids, deleted=False).select_related(
+            "ball", "special"
+        )
+    }
+    return [rows[pk] for pk in instance_ids if pk in rows]
+
+
+async def _show_merge_panel(
+    interaction: Interaction,
+    bot: BallsDexBot,
+    owner_id: int,
+    *,
+    selected_ball_id: int | None = None,
+    notice: str = "",
+) -> None:
+    merge_debug(
+        "H2",
+        "merge_views._show_merge_panel:entry",
+        "refresh merge panel",
+        {
+            "owner_id": owner_id,
+            "ball_id": selected_ball_id,
+            "response_done": interaction.response.is_done(),
+            "notice_len": len(notice),
+        },
+    )
+    try:
+        layout = await build_merge_picker_view(bot, owner_id, selected_ball_id=selected_ball_id, notice=notice)
+    except Exception as exc:
+        merge_debug(
+            "H5",
+            "merge_views._show_merge_panel:build_failed",
+            "build_merge_picker_view raised",
+            {"error": type(exc).__name__, "msg": str(exc)[:240]},
+        )
+        log.exception("Failed to build merge panel for user %s", owner_id)
+        user_notice = f"❌ Could not load forge panel ({type(exc).__name__}). Try `/merge` again."
+        if interaction.response.is_done():
+            try:
+                await interaction.followup.send(user_notice, ephemeral=True)
+            except discord.HTTPException:
+                pass
+        else:
+            try:
+                await interaction.response.send_message(user_notice, ephemeral=True)
+            except discord.HTTPException:
+                pass
+        return
+
+    try:
+        if interaction.response.is_done():
+            await interaction.edit_original_response(view=layout)
+        else:
+            await interaction.response.edit_message(view=layout)
+        merge_debug("H2", "merge_views._show_merge_panel:ok", "panel edit succeeded", {"owner_id": owner_id})
+    except discord.NotFound as exc:
+        merge_debug(
+            "H2",
+            "merge_views._show_merge_panel:not_found",
+            "panel message missing",
+            {"owner_id": owner_id, "msg": str(exc)[:120]},
+        )
+        text = notice or "❌ Forge panel expired — run `/merge` again."
+        try:
+            await interaction.followup.send(text, ephemeral=True)
+        except discord.HTTPException:
+            pass
+    except discord.HTTPException as exc:
+        merge_debug(
+            "H2",
+            "merge_views._show_merge_panel:http_error",
+            "discord rejected panel edit",
+            {
+                "owner_id": owner_id,
+                "status": getattr(exc, "status", None),
+                "code": getattr(exc, "code", None),
+                "text": str(exc)[:240],
+            },
+        )
+        log.exception("Could not refresh merge panel for user %s", owner_id)
+        code = getattr(exc, "code", None)
+        code_part = f" (code {code})" if code else ""
+        user_notice = notice or f"❌ Discord rejected the forge panel update{code_part}. Run `/merge` again."
+        try:
+            await interaction.followup.send(user_notice, ephemeral=True)
+        except discord.HTTPException:
+            pass
+
+
 class MergeClubballSelect(discord.ui.Select):
     def __init__(self, owner_id: int, summaries: list[MergeClubballSummary], *, selected_ball_id: int | None):
         self.owner_id = owner_id
@@ -206,9 +301,11 @@ class MergeClubballSelect(discord.ui.Select):
         if interaction.user.id != self.owner_id:
             await interaction.response.send_message("This forge is private to you.", ephemeral=True)
             return
+        await interaction.response.defer(ephemeral=True)
         bot = cast("BallsDexBot", interaction.client)
-        layout = await build_merge_picker_view(bot, self.owner_id, selected_ball_id=int(self.values[0]))
-        await interaction.response.edit_message(view=layout)
+        await _show_merge_panel(
+            interaction, bot, self.owner_id, selected_ball_id=int(self.values[0]), notice="⏳ Loading forge ladder…"
+        )
 
 
 class MergeActionRow(ActionRow):
@@ -232,72 +329,131 @@ class MergeActionRow(ActionRow):
             await interaction.response.send_message("Pick a clubball first.", ephemeral=True)
             return
 
-        bot = cast("BallsDexBot", interaction.client)
-        await interaction.response.defer()
-        loading_layout = await build_merge_picker_view(
-            bot,
-            self.owner_id,
-            selected_ball_id=self.ball_id,
-            notice="⏳ Forging your next tier…",
+        merge_debug(
+            "H1",
+            "merge_views.forge_button:entry",
+            "forge clicked",
+            {"owner_id": self.owner_id, "ball_id": self.ball_id},
         )
-        await interaction.edit_original_response(view=loading_layout, attachments=[])
-        player, _ = await Player.objects.aget_or_create(discord_id=self.owner_id)
-        summaries = await _load_merge_summaries(player)
-        summary = _find_summary(summaries, self.ball_id)
-        if summary is None:
-            layout = await build_merge_picker_view(
-                bot, self.owner_id, notice="❌ That clubball is no longer mergeable."
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except discord.HTTPException as exc:
+            merge_debug(
+                "H1",
+                "merge_views.forge_button:defer_failed",
+                "defer failed",
+                {"status": getattr(exc, "status", None), "code": getattr(exc, "code", None), "text": str(exc)[:200]},
             )
-            await interaction.edit_original_response(view=layout, attachments=[])
+            try:
+                await interaction.response.send_message(
+                    "❌ Could not start forging — Discord rejected the interaction. Run `/merge` again.",
+                    ephemeral=True,
+                )
+            except discord.HTTPException:
+                pass
             return
 
-        target_level = _current_target_level(summary.counts)
-        if target_level is None:
-            layout = await build_merge_picker_view(
+        merge_debug("H1", "merge_views.forge_button:deferred", "defer ok", {"owner_id": self.owner_id})
+        bot = cast("BallsDexBot", interaction.client)
+        try:
+            await _show_merge_panel(
+                interaction,
                 bot,
                 self.owner_id,
                 selected_ball_id=self.ball_id,
-                notice="❌ You do not have enough copies for the next visible forge tier yet.",
+                notice="⏳ Forging your next tier…",
             )
-            await interaction.edit_original_response(view=layout, attachments=[])
-            return
+            player, _ = await Player.objects.aget_or_create(discord_id=self.owner_id)
+            summaries = await _load_merge_summaries(player)
+            summary = _find_summary(summaries, self.ball_id)
+            if summary is None:
+                await _show_merge_panel(
+                    interaction, bot, self.owner_id, notice="❌ That clubball is no longer mergeable."
+                )
+                return
 
-        instances = _target_instances(summary, target_level)
-        try:
+            target_level = _current_target_level(summary.counts)
+            if target_level is None:
+                await _show_merge_panel(
+                    interaction,
+                    bot,
+                    self.owner_id,
+                    selected_ball_id=self.ball_id,
+                    notice="❌ You do not have enough copies for the next visible forge tier yet.",
+                )
+                return
+
+            instance_ids = [instance.pk for instance in _target_instances(summary, target_level)]
+            instances = await _fresh_instances(instance_ids)
+            cfg = get_merge_level_config(target_level)
+            merge_debug(
+                "H4",
+                "merge_views.forge_button:inputs",
+                "resolved forge inputs",
+                {
+                    "target_level": target_level,
+                    "need": cfg.input_count,
+                    "have": len(instances),
+                    "instance_ids": instance_ids,
+                },
+            )
+            if len(instances) != cfg.input_count:
+                await _show_merge_panel(
+                    interaction,
+                    bot,
+                    self.owner_id,
+                    selected_ball_id=self.ball_id,
+                    notice="❌ Some input cards are no longer available. Refresh and try again.",
+                )
+                return
+
             await validate_merge_batch(player, instances)
-            _, summary_text, _, _ = await execute_merge(player, instances, guild_id=interaction.guild_id, bot=bot)
-        except MergeValidationError as exc:
-            layout = await build_merge_picker_view(
-                bot, self.owner_id, selected_ball_id=self.ball_id, notice=f"❌ {exc.message}"
+            new_instance, summary_text, _, forged_level = await execute_merge(
+                player, instances, guild_id=interaction.guild_id, bot=bot
             )
-            await interaction.edit_original_response(view=layout, attachments=[])
-            return
-        except Exception:
+            merge_debug(
+                "H4",
+                "merge_views.forge_button:success",
+                "execute_merge ok",
+                {"instance_id": new_instance.pk, "level": forged_level},
+            )
+            await _show_merge_panel(
+                interaction, bot, self.owner_id, selected_ball_id=self.ball_id, notice=summary_text
+            )
+        except MergeValidationError as exc:
+            merge_debug(
+                "H3",
+                "merge_views.forge_button:validation",
+                "merge validation failed",
+                {"message": exc.message[:240]},
+            )
+            await _show_merge_panel(
+                interaction, bot, self.owner_id, selected_ball_id=self.ball_id, notice=f"❌ {exc.message}"
+            )
+        except Exception as exc:
+            merge_debug(
+                "H4",
+                "merge_views.forge_button:exception",
+                "unexpected forge failure",
+                {"error": type(exc).__name__, "msg": str(exc)[:240]},
+            )
             log.exception("Merge forge failed for user %s ball %s", self.owner_id, self.ball_id)
-            layout = await build_merge_picker_view(
+            await _show_merge_panel(
+                interaction,
                 bot,
                 self.owner_id,
                 selected_ball_id=self.ball_id,
-                notice="❌ Forge failed unexpectedly. Try again, and check logs if it keeps happening.",
+                notice=f"❌ Forge failed: **{type(exc).__name__}** — {str(exc)[:200]}",
             )
-            await interaction.edit_original_response(view=layout, attachments=[])
-            return
-
-        layout = await build_merge_picker_view(bot, self.owner_id, selected_ball_id=self.ball_id, notice=summary_text)
-        try:
-            await interaction.edit_original_response(view=layout, attachments=[])
-        except discord.HTTPException:
-            log.exception("Merge panel refresh failed after forge for user %s", self.owner_id)
-            await interaction.followup.send(summary_text, ephemeral=True)
 
     @button(label="Refresh", style=discord.ButtonStyle.secondary, emoji="🔄")
     async def refresh_button(self, interaction: Interaction, button: Button):
         if interaction.user.id != self.owner_id:
             await interaction.response.send_message("This forge is private to you.", ephemeral=True)
             return
+        await interaction.response.defer(ephemeral=True)
         bot = cast("BallsDexBot", interaction.client)
-        layout = await build_merge_picker_view(bot, self.owner_id, selected_ball_id=self.ball_id)
-        await interaction.response.edit_message(view=layout)
+        await _show_merge_panel(interaction, bot, self.owner_id, selected_ball_id=self.ball_id)
 
 
 async def build_merge_picker_view(
