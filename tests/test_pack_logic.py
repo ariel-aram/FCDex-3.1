@@ -20,26 +20,28 @@ from django.utils import timezone
 
 from fcdex_3_1.fcdex_ext.pack_assets import pack_art_path
 from fcdex_3_1.fcdex_ext.pack_logic import (
+    EXCLUSIVE_REWARDS,
     PACK_REWARDS,
+    PackRewardLine,
     PackType,
     collection_card_file,
     cooldown_remaining,
     format_pack_open_message,
+    roll_pack_stat_bonuses,
 )
+from fcdex_3_1.models import PackType as ModelPackType
 
 
-def test_format_pack_open_message_single_ball():
-    text = format_pack_open_message("Daily Pack", 293, ["Me Pica un Pulmon"])
+def test_format_pack_open_message_with_stat_rolls():
+    lines = [
+        PackRewardLine("Alpha", 5, -2, "Shiny"),
+        PackRewardLine("Beta", -3, 8, None),
+    ]
+    text = format_pack_open_message("Daily Pack", 293, lines)
     assert "**+293** coins" in text
-    assert "**1** clubball(s)" in text
-    assert "Me Pica un Pulmon" in text
-
-
-def test_format_pack_open_message_multiple_balls():
-    text = format_pack_open_message("Weekly Pack", 1500, ["Alpha", "Beta", "Gamma"])
-    assert "**+1,500** coins" in text
-    assert "**3** clubball(s)" in text
-    assert "**Alpha**" in text and "**Beta**" in text
+    assert "**2** clubball(s)" in text
+    assert "**Alpha**" in text and "`+5%` ATK" in text
+    assert "**Shiny**" in text
 
 
 def test_format_pack_open_message_no_balls():
@@ -65,19 +67,30 @@ def test_cooldown_remaining_none_when_never_claimed():
     assert cooldown_remaining(None, PackType.DAILY) is None
 
 
-def test_pack_reward_counts_grant_multiple_collectibles():
-    assert PACK_REWARDS[PackType.DAILY]["balls"] >= 2
-    assert PACK_REWARDS[PackType.WEEKLY]["balls"] >= 2
-    assert PACK_REWARDS[PackType.MASCOT]["balls"] >= 2
+def test_cooldown_exclusive_has_no_player_cooldown():
+    last = SimpleNamespace(claimed_at=timezone.now())
+    assert cooldown_remaining(last, PackType.EXCLUSIVE) is None
+
+
+def test_pack_reward_counts():
+    assert PACK_REWARDS[PackType.DAILY]["balls"] == 3
+    assert PACK_REWARDS[PackType.WEEKLY]["balls"] == 5
+    assert EXCLUSIVE_REWARDS["balls"] == 5
+
+
+def test_exclusive_stat_rolls_are_high():
+    atk, hp = roll_pack_stat_bonuses(PackType.EXCLUSIVE)
+    assert atk >= 1
+    assert hp >= 1
 
 
 def test_pack_art_files_exist():
-    for pack_type in (PackType.DAILY, PackType.WEEKLY, PackType.MASCOT):
+    for pack_type in (ModelPackType.DAILY, ModelPackType.WEEKLY, ModelPackType.EXCLUSIVE):
         assert pack_art_path(pack_type).is_file()
 
 
 def test_cooldown_remaining_after_recent_claim():
     last = SimpleNamespace(claimed_at=timezone.now())
-    remaining = cooldown_remaining(last, PackType.DAILY.value)  # type: ignore[arg-type]
+    remaining = cooldown_remaining(last, PackType.DAILY)
     assert remaining is not None
     assert remaining > timedelta(hours=23)

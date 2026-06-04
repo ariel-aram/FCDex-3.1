@@ -14,6 +14,7 @@ from fcdex_3_1.fcdex_ext.boss_views import build_boss_admin_layout
 from fcdex_3_1.fcdex_ext.craft_admin_views import build_craft_admin_layout
 from fcdex_3_1.fcdex_ext.interaction_context import admin_context
 from fcdex_3_1.fcdex_ext.merge_admin_views import build_merge_admin_layout
+from fcdex_3_1.fcdex_ext.pack_admin_views import build_pack_admin_layout
 from fcdex_3_1.fcdex_ext.quest_admin_views import build_quest_admin_layout
 from fcdex_3_1.fcdex_ext.shop_admin_views import build_shop_admin_layout
 from fcdex_3_1.fcdex_ext.views import build_panel_layout, truncate_text
@@ -69,6 +70,12 @@ class AdminHubControlsRow2(ActionRow):
         layout = await build_merge_admin_layout(self.owner_id, ctx, notice="")
         await interaction.response.edit_message(view=layout)
 
+    @button(label="Packs", style=discord.ButtonStyle.primary, emoji="📦")
+    async def packs(self, interaction: Interaction, button: Button):
+        ctx = admin_context(interaction)
+        layout = build_pack_admin_layout(self.owner_id, ctx.guild_id)
+        await interaction.response.edit_message(view=layout)
+
     @button(label="Owners", style=discord.ButtonStyle.secondary, emoji="🔍")
     async def owners(self, interaction: Interaction, button: Button):
         await interaction.response.send_modal(OwnersLookupModal(self.owner_id))
@@ -102,6 +109,7 @@ def build_admin_hub_layout(owner_id: int, guild_id: int | None, channel_id: int)
                 "-# **Quests** — daily quest targets, rewards & hooks.\n"
                 "-# **Achievements** — goals, rewards & visibility for `/achievement menu`.\n"
                 "-# **Merge** — global quota, premium bonus & per-player overrides.\n"
+                "-# **Packs** — grant **Exclusive Pack** (admin-only; daily/weekly are `/pack`).\n"
                 "-# **Boss** — start raids here or in any channel/DM.\n"
                 "-# **Announce** — DM players or broadcast to all servers (confirm before send)."
             )

@@ -41,6 +41,7 @@ def _install_bd_models_stub() -> None:
         setattr(models, name, type(name, (_DummyModel,), {"DoesNotExist": _DoesNotExist}))
 
     models.balls = {}
+    models.specials = {}
     pkg = ModuleType("bd_models")
     pkg.models = models
     sys.modules["bd_models"] = pkg
@@ -80,7 +81,7 @@ class _FcdexDummyModel:
 class _PackType(StrEnum):
     DAILY = "daily"
     WEEKLY = "weekly"
-    MASCOT = "mascot"
+    EXCLUSIVE = "exclusive"
 
 
 class _AchievementType:

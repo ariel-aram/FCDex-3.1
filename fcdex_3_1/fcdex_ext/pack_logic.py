@@ -4,13 +4,13 @@ import logging
 import random
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 import discord
 from django.utils import timezone
 
-from bd_models.models import Ball, BallInstance, Player, balls
+from bd_models.models import Ball, BallInstance, Player, Special, balls
 from fcdex_3_1.models import PackClaim, PackType
 
 if TYPE_CHECKING:
@@ -21,14 +21,29 @@ log = logging.getLogger("fcdex_3_1.pack")
 PACK_COOLDOWNS = {
     PackType.DAILY: timedelta(hours=24),
     PackType.WEEKLY: timedelta(days=7),
-    PackType.MASCOT: timedelta(days=7),
 }
 
 PACK_REWARDS = {
     PackType.DAILY: {"coins_min": 250, "coins_max": 750, "balls": 3},
     PackType.WEEKLY: {"coins_min": 1_000, "coins_max": 2_500, "balls": 5},
-    PackType.MASCOT: {"coins_min": 500, "coins_max": 1_500, "balls": 3},
 }
+
+EXCLUSIVE_REWARDS = {
+    "coins_min": 15_000,
+    "coins_max": 45_000,
+    "balls": 5,
+    "special_chance": 0.7,
+}
+
+USER_PACK_TYPES = frozenset({PackType.DAILY, PackType.WEEKLY})
+
+
+@dataclass(frozen=True)
+class PackRewardLine:
+    country: str
+    attack_bonus: int
+    health_bonus: int
+    special_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -36,6 +51,7 @@ class PackOpenSuccess:
     message: str
     instances: tuple[BallInstance, ...]
     balls: tuple[Ball, ...]
+    reward_lines: tuple[PackRewardLine, ...] = ()
 
 
 async def last_pack_claim(player: Player, pack_type: str) -> PackClaim | None:
@@ -45,6 +61,8 @@ async def last_pack_claim(player: Player, pack_type: str) -> PackClaim | None:
 def cooldown_remaining(last: PackClaim | None, pack_type: str) -> timedelta | None:
     if last is None:
         return None
+    if pack_type not in PACK_COOLDOWNS:
+        return None
     delta = PACK_COOLDOWNS[PackType(pack_type)]
     ready_at = last.claimed_at + delta
     now = timezone.now()
@@ -53,19 +71,105 @@ def cooldown_remaining(last: PackClaim | None, pack_type: str) -> timedelta | No
     return ready_at - now
 
 
-def _spawnable_balls() -> list[Ball]:
+def _server_bonus_caps() -> tuple[int, int]:
+    try:
+        from settings.models import settings as server_settings
+
+        return max(1, int(server_settings.max_attack_bonus)), max(1, int(server_settings.max_health_bonus))
+    except (ImportError, ModuleNotFoundError, AttributeError, TypeError, ValueError):
+        return 10, 10
+
+
+def roll_pack_stat_bonuses(pack_type: str) -> tuple[int, int]:
+    max_atk, max_hp = _server_bonus_caps()
+    if pack_type == PackType.EXCLUSIVE:
+        return (
+            random.randint(max(max_atk * 3 // 4, 1), max_atk),
+            random.randint(max(max_hp * 3 // 4, 1), max_hp),
+        )
+    if pack_type == PackType.WEEKLY:
+        return (
+            random.randint(-max_atk // 2, max_atk),
+            random.randint(-max_hp // 2, max_hp),
+        )
+    return (
+        random.randint(-max_atk, max_atk),
+        random.randint(-max_hp, max_hp),
+    )
+
+
+def _special_is_active(special: Special, now: datetime, *, min_dt: datetime, max_dt: datetime) -> bool:
+    start = special.start_date or min_dt
+    end = special.end_date or max_dt
+    return start <= now <= end
+
+
+async def pick_random_special() -> Special | None:
+    tz = timezone.get_current_timezone()
+    now = timezone.now()
+    min_dt = datetime.min.replace(tzinfo=tz)
+    max_dt = datetime.max.replace(tzinfo=tz)
+    population: list[Special] = []
+    try:
+        from bd_models.models import specials as specials_cache
+
+        population = [
+            special
+            for special in specials_cache.values()
+            if _special_is_active(special, now, min_dt=min_dt, max_dt=max_dt)
+        ]
+    except (ImportError, AttributeError):
+        population = []
+    if not population:
+        population = [
+            special
+            async for special in Special.objects.all()
+            if _special_is_active(special, now, min_dt=min_dt, max_dt=max_dt)
+        ]
+    if not population:
+        return None
+    common_weight = max(0.0, 1.0 - sum(special.rarity for special in population))
+    weights = [special.rarity for special in population] + [common_weight]
+    return random.choices(population=population + [None], weights=weights, k=1)[0]
+
+
+def _spawnable_balls(*, rare_bias: bool = False) -> list[Ball]:
     cached = list(balls.values()) if balls else []
-    return [b for b in cached if b.enabled]
+    pool = [ball for ball in cached if ball.enabled]
+    if not pool and Ball.objects.exists():
+        return []
+    if not rare_bias or len(pool) < 3:
+        return pool
+    sorted_pool = sorted(pool, key=lambda ball: ball.rarity)
+    cutoff = max(1, len(sorted_pool) // 3)
+    return sorted_pool[:cutoff]
 
 
-def format_pack_open_message(pack_label: str, coins: int, ball_names: list[str]) -> str:
-    if not ball_names:
+async def _resolve_ball_pool(*, rare_bias: bool = False) -> list[Ball]:
+    pool = _spawnable_balls(rare_bias=rare_bias)
+    if pool:
+        return pool
+    return [ball async for ball in Ball.objects.filter(enabled=True)]
+
+
+async def _pick_pack_ball(*, rare_bias: bool = False) -> Ball | None:
+    pool = await _resolve_ball_pool(rare_bias=rare_bias)
+    if not pool:
+        return None
+    return random.choice(pool)
+
+
+def format_pack_open_message(pack_label: str, coins: int, reward_lines: list[PackRewardLine]) -> str:
+    if not reward_lines:
         ball_text = "no clubballs (dex cache empty)"
-    elif len(ball_names) == 1:
-        ball_text = ball_names[0]
     else:
-        ball_text = ", ".join(f"**{name}**" for name in ball_names)
-    return f"**+{coins:,}** coins\n**{len(ball_names)}** clubball(s): {ball_text}"
+        parts: list[str] = []
+        for line in reward_lines:
+            stats = f"`{line.attack_bonus:+}%` ATK · `{line.health_bonus:+}%` HP"
+            tag = f" · **{line.special_name}**" if line.special_name else ""
+            parts.append(f"**{line.country}** ({stats}){tag}")
+        ball_text = "\n".join(parts)
+    return f"**+{coins:,}** coins\n**{len(reward_lines)}** clubball(s):\n{ball_text}"
 
 
 def collection_card_file(ball: Ball, *, index: int = 1) -> discord.File | None:
@@ -88,7 +192,66 @@ async def render_pack_card_file(
         return collection_card_file(ball, index=index)
 
 
-async def grant_pack(player: Player, pack_type: str, *, guild_id: int | None) -> tuple[bool, str | PackOpenSuccess]:
+async def _grant_pack_rewards(
+    player: Player,
+    pack_type: str,
+    *,
+    guild_id: int | None,
+    rewards: dict[str, int],
+    rare_bias: bool,
+    special_chance: float,
+) -> PackOpenSuccess:
+    coins = random.randint(rewards["coins_min"], rewards["coins_max"])
+    if coins:
+        await player.add_money(coins)
+
+    granted_balls: list[Ball] = []
+    granted_instances: list[BallInstance] = []
+    reward_lines: list[PackRewardLine] = []
+
+    for _ in range(rewards["balls"]):
+        ball = await _pick_pack_ball(rare_bias=rare_bias)
+        if ball is None:
+            break
+        attack_bonus, health_bonus = roll_pack_stat_bonuses(pack_type)
+        special: Special | None = None
+        if random.random() < special_chance:
+            special = await pick_random_special()
+        instance = await BallInstance.objects.acreate(
+            ball=ball,
+            player=player,
+            attack_bonus=attack_bonus,
+            health_bonus=health_bonus,
+            server_id=guild_id,
+            special=special,
+        )
+        granted_balls.append(ball)
+        granted_instances.append(instance)
+        reward_lines.append(
+            PackRewardLine(
+                country=ball.country,
+                attack_bonus=attack_bonus,
+                health_bonus=health_bonus,
+                special_name=special.name if special else None,
+            )
+        )
+
+    pack_label = PackType(pack_type).label
+    message = format_pack_open_message(pack_label, coins, reward_lines)
+    return PackOpenSuccess(
+        message=message,
+        instances=tuple(granted_instances),
+        balls=tuple(granted_balls),
+        reward_lines=tuple(reward_lines),
+    )
+
+
+async def grant_player_pack(
+    player: Player, pack_type: str, *, guild_id: int | None
+) -> tuple[bool, str | PackOpenSuccess]:
+    if pack_type not in USER_PACK_TYPES:
+        return False, "**Exclusive Pack** can only be granted by admins — it is not available from `/pack`."
+
     pack_enum = PackType(pack_type)
     last = await last_pack_claim(player, pack_type)
     if remaining := cooldown_remaining(last, pack_type):
@@ -96,30 +259,30 @@ async def grant_pack(player: Player, pack_type: str, *, guild_id: int | None) ->
         mins = int((remaining.total_seconds() % 3600) // 60)
         return False, f"**{pack_enum.label}** is on cooldown — try again in **{hours}h {mins}m**."
 
-    rewards = PACK_REWARDS[pack_enum]
-    coins = random.randint(rewards["coins_min"], rewards["coins_max"])
-    if coins:
-        await player.add_money(coins)
-
-    pool = _spawnable_balls()
-    if not pool and Ball.objects.exists():
-        pool = [b async for b in Ball.objects.filter(enabled=True)]
-    granted_balls: list[Ball] = []
-    granted_instances: list[BallInstance] = []
-    for _ in range(rewards["balls"]):
-        if not pool:
-            break
-        ball = random.choice(pool)
-        instance = await BallInstance.objects.acreate(
-            ball=ball, player=player, attack_bonus=0, health_bonus=0, server_id=guild_id
-        )
-        granted_balls.append(ball)
-        granted_instances.append(instance)
-
+    success = await _grant_pack_rewards(
+        player,
+        pack_type,
+        guild_id=guild_id,
+        rewards=PACK_REWARDS[pack_enum],
+        rare_bias=False,
+        special_chance=0.0,
+    )
     await PackClaim.objects.acreate(player=player, pack_type=pack_type)
     if pack_type == PackType.DAILY:
         from fcdex_3_1.fcdex_ext.quest_logic import bump_quest
 
         await bump_quest(player, "pack_daily")
-    message = format_pack_open_message(pack_enum.label, coins, [b.country for b in granted_balls])
-    return True, PackOpenSuccess(message=message, instances=tuple(granted_instances), balls=tuple(granted_balls))
+    return True, success
+
+
+async def grant_exclusive_pack(player: Player, *, guild_id: int | None) -> PackOpenSuccess:
+    success = await _grant_pack_rewards(
+        player,
+        PackType.EXCLUSIVE,
+        guild_id=guild_id,
+        rewards=EXCLUSIVE_REWARDS,
+        rare_bias=True,
+        special_chance=EXCLUSIVE_REWARDS["special_chance"],
+    )
+    await PackClaim.objects.acreate(player=player, pack_type=PackType.EXCLUSIVE)
+    return success

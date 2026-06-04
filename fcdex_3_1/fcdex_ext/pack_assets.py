@@ -8,7 +8,7 @@ from fcdex_3_1.models import PackType
 _PACK_ART: dict[str, str] = {
     PackType.DAILY: "daily-pack.png",
     PackType.WEEKLY: "weekly-pack.png",
-    PackType.MASCOT: "exclusive-pack.png",
+    PackType.EXCLUSIVE: "exclusive-pack.png",
 }
 
 

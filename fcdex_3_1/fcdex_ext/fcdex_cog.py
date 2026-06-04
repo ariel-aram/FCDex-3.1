@@ -53,7 +53,8 @@ class FcdexCog(commands.GroupCog, group_name="fcdex"):
             title="FCDex 3.1",
             subtitle="Official extra · Components v2",
             sections=[
-                "### 📦 Packs\n`/pack daily` · `/pack weekly` · `/pack exclusive` (3 / 5 / 3 clubballs)",
+                "### 📦 Packs\n`/pack daily` (24h) · `/pack weekly` (7d) — stat rolls on each card\n"
+                "-# **Exclusive Pack** — admins only via `/fcdex admin` → **Packs**",
                 "### 🧪 Craft (SBC)\n`/craft menu` · `/craft complete name:<SBC>`",
                 "### ⚔️ Battles\n"
                 "`/battle challenge` — lineup panel\n"

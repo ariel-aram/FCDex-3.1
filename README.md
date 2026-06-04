@@ -10,9 +10,9 @@ Use `/fcdex menu` for the full command directory.
 
 | Command | Description |
 | ------- | ----------- |
-| `/pack daily` | Daily pack — coins + clubball (24h cooldown) |
-| `/pack weekly` | Weekly pack — better rewards (7d cooldown) |
-| `/pack mascot` | Mascot pack (7d cooldown) |
+| `/pack daily` | **Daily Pack** — 3 clubballs, coins, random ATK/HP % rolls (24h cooldown) |
+| `/pack weekly` | **Weekly Pack** — 5 clubballs, coins, stat rolls (7d cooldown) |
+| `/fcdex admin` → **Packs** | **Exclusive Pack** (admin-only) — rare clubballs, high stat boosts, specials, large coins |
 
 ### 🛒 Shop
 
@@ -83,7 +83,7 @@ All admin panels use Components v2 and reply **ephemeral**.
 
 ```toml
 [[ballsdex.packages]]
-location = "git+https://github.com/ariel-aram/FCDex-3.1.git@2.5.2"
+location = "git+https://github.com/FCDex-Team/FCDex-3.1.git@3.0.0"
 path = "fcdex_3_1"
 enabled = true
 ```
@@ -94,7 +94,7 @@ docker compose build && docker compose up -d
 
 ### Upgrading
 
-- Set `path = "fcdex_3_1"` and pin the latest tag (e.g. **`@2.5.2`**).
+- Set `path = "fcdex_3_1"` and pin the latest tag (e.g. **`@3.0.0`**).
 - Run migrations through **`0011`** (configurable daily quests).
 - Django app **label stays `fcdex_3_0`** for database compatibility.
 - Enable economy: admin **Settings** → set **`currency_name`** (e.g. `coin`).

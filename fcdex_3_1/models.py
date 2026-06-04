@@ -344,7 +344,7 @@ class PlayerMergeQuota(models.Model):
 class PackType(models.TextChoices):
     DAILY = "daily", "Daily Pack"
     WEEKLY = "weekly", "Weekly Pack"
-    MASCOT = "mascot", "Exclusive Pack"
+    EXCLUSIVE = "exclusive", "Exclusive Pack"
 
 
 class PackClaim(models.Model):
